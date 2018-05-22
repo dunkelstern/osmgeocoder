@@ -1,0 +1,7 @@
+out.png
+dump.json
+__pycache__
+*.pyc
+.idea/
+.vscode/
+
