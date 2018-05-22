@@ -16,12 +16,20 @@ Python implementation for a OSM Geocoder
 ```bash
 $ imposm import -connection postgis://user:password@host:port/database -mapping doc/imposm_mapping.yml -read /path/to/osm.pbf -write -deployproduction
 ```
-5. Create a virtualenv and install packages:
+5. Create the trigram search extension for the DB:
+```sql
+CREATE EXTENSION pg_trgm;
+```
+6. Create a trigram index on the `osm_buildings` table:
+```sql
+CREATE index trgm_idx ON osm_buildings USING GIST (street gist_trgm_ops);
+```
+7. Create a virtualenv and install packages:
 ```bash
 mkvirtualenv -p /usr/bin/python3 osmgeocoder
 pip install -r requirements.txt
 ```
-6. Geocode:
+8. Geocode:
 ```bash
 python address2coordinate.py --config config/db.json --country de --center 48.3849 10.8631 Lauter
 python coordinate2address.py --config config/db.json 48.3849 10.8631
