@@ -20,17 +20,29 @@ $ imposm import -connection postgis://user:password@host:port/database -mapping 
 ```sql
 CREATE EXTENSION pg_trgm;
 ```
-6. Create a trigram index on the `osm_buildings` table:
-```sql
-CREATE index trgm_idx ON osm_buildings USING GIST (street gist_trgm_ops);
+6. Install the [postal extension](https://github.com/pramsey/pgsql-postal) for PostgreSQL
+``` bash
+$ git clone https://github.com/pramsey/pgsql-postal.git
+$ cd pgsql-postal
+$ make && sudo make install
 ```
-7. Create a virtualenv and install packages:
+```sql
+CREATE EXTENSION postal;
+```
+7. Create a trigram index on the `osm_buildings` table:
+```sql
+CREATE index road_trgm_idx ON osm_buildings USING GIST (road gist_trgm_ops);
+CREATE index city_trgm_idx ON osm_buildings USING GIST (city gist_trgm_ops);
+CREATE index postcode_trgm_idx ON osm_buildings USING GIST (postcode gist_trgm_ops);
+CREATE index house_number_idx ON osm_buildings using BTREE (house_number);
+```
+8. Create a virtualenv and install packages:
 ```bash
 mkvirtualenv -p /usr/bin/python3 osmgeocoder
 pip install -r requirements.txt
 ```
 8. Geocode:
 ```bash
-python address2coordinate.py --config config/db.json --country de --center 48.3849 10.8631 Lauter
+python address2coordinate.py --config config/db.json --center 48.3849 10.8631 Lauterl
 python coordinate2address.py --config config/db.json 48.3849 10.8631
 ```
