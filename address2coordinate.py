@@ -44,7 +44,7 @@ kwargs = {}
 if args.center is not None:
     kwargs['center'] = (args.center[0], args.center[1])
 if args.country is not None:
-    kwargs['country'] = args.country
+    kwargs['country'] = args.country[0]
 
 results = geocode_forward(db, args.address, **kwargs)
 
