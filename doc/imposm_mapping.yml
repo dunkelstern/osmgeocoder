@@ -11,9 +11,6 @@ tables:
     - key: name
       name: name
       type: string
-    - key: area
-      name: area
-      type: pseudoarea
     - name: type
       type: mapping_value
     - key: addr:street
@@ -50,6 +47,12 @@ tables:
     - key: name
       name: road
       type: string
+    - key: addr:postcode
+      name: postcode
+      type: string
+    - key: addr:city
+      name: city
+      type: string
     - name: class
       type: mapping_key
     filters:
@@ -58,18 +61,6 @@ tables:
       require:
         name: [__any__]
     mappings:
-      railway:
-        mapping:
-          railway:
-          - rail
-          - tram
-          - light_rail
-          - subway
-          - narrow_gauge
-          - preserved
-          - funicular
-          - monorail
-          - disused
       roads:
         mapping:
           highway:
@@ -100,3 +91,35 @@ tables:
           - pier
           - groyne
     type: linestring
+  admin:
+    columns:
+    - name: osm_id
+      type: id
+    - name: geometry
+      type: geometry
+    - key: name
+      name: name
+      type: string
+    - key: admin_level
+      name: admin_level
+      type: integer
+    - key: place
+      name: type
+      type: string
+    mapping:
+      boundary:
+      - administrative
+    type: polygon
+  postal_code:
+    columns:
+    - name: osm_id
+      type: id
+    - name: geometry
+      type: geometry
+    - key: postal_code
+      name: postcode
+      type: string
+    mapping:
+      boundary:
+      - postal_code
+    type: polygon
