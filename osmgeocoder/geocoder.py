@@ -60,7 +60,7 @@ class Geocoder():
             if item is not None:
                 return self.formatter.format(item)
 
-    def _fetch_address(self, center, radius, limit=10):
+    def _fetch_address(self, center, radius, limit=1):
         query = '''
             SELECT house, road, house_number, postcode, city, min(distance) as distance FROM (
                 SELECT
@@ -102,7 +102,7 @@ class Geocoder():
         for result in cursor:
             yield result
 
-    def _fetch_coordinate(self, search_term, center=None, country=None, limit=20):
+    def _fetch_coordinate(self, search_term, center=None, country=None, radius=20000, limit=20):
         cursor = self.db.cursor(cursor_factory=RealDictCursor)
 
         try:
@@ -121,16 +121,34 @@ class Geocoder():
         # add a where clause for each resolved address field
         q = []
         v = []
-        for query_part in ['road', 'house_number']:
-            if query_part in parsed_address:
-                q.append('b.{field} %% %s'.format(field=query_part))
-                v.append(parsed_address[query_part])
+
+        # when we have a road search for that
+        if 'road' in parsed_address:
+            q.append('b.road %% %s')
+            v.append(parsed_address['road'])
+
+            # if we have a house additionally search for that
+            if 'house' in parsed_address:
+                q.append('b.name %% %s')
+                v.append(parsed_address['house'])
+        elif 'house' in parsed_address:
+            # no road, just a house: most likely missclassified
+            q.append('b.road %% %s')
+            v.append(parsed_address['house'])
+
+        # Add house number to search terms
+        if 'house_number' in parsed_address:
+            q.append('b.house_number %% %s')
+            v.append(parsed_address['house_number'])
 
         # create a trigram distance function for sorting
-        if 'road' in parsed_address:
+        if 'road' in parsed_address or 'house' in parsed_address:
             # base it on the road from the address
             trgm_dist = 'road <-> %s as trgm_dist'
-            v.insert(0, parsed_address['road'])
+            if 'road' in parsed_address:
+                v.insert(0, parsed_address['road'])
+            else:
+                v.insert(0, parsed_address['house'])
         else:
             # no basis for trigram distance
             trgm_dist = '0 as trgm_dist'
@@ -142,11 +160,17 @@ class Geocoder():
             distance = ''
             order_by_distance = ''
         else:
-            distance = ", ST_Distance(ST_Centroid(b.geometry), ST_GeomFromText('POINT({x} {y})', 3857)) as dist".format(
+            distance = ", ST_Distance(b.geometry, ST_GeomFromText('POINT({x} {y})', 3857)) as dist".format(
                 x=center[0],
                 y=center[1]
             )
             order_by_distance = 'dist ASC,'
+            where = "ST_DWithin(b.geometry, ST_GeomFromText('POINT({x} {y})', 3857), {radius}) AND {where}".format(
+                x=center[0],
+                y=center[1],
+                radius=radius,
+                where=where
+            )
 
         if 'postcode' in parsed_address:
             # resolve post code area
@@ -160,13 +184,13 @@ class Geocoder():
                     {distance}
                 FROM {postcode_table} pc
                 JOIN {buildings_table} b
-                    ON ST_Contains(pc.geometry, ST_Centroid(b.geometry))
+                    ON ST_Intersects(pc.geometry, b.geometry)
                 LEFT JOIN {admin_table} a
-                    ON (a.admin_level = 6 AND ST_Contains(a.geometry, ST_Centroid(b.geometry)))
+                    ON (a.admin_level = 6 AND ST_Intersects(a.geometry, b.geometry))
                 WHERE
                     pc.postcode = %s
                     AND ({where})
-                ORDER BY {order_by_distance} trgm_dist DESC
+                ORDER BY {order_by_distance} trgm_dist ASC
                 LIMIT {limit};
             '''.format(
                 trgm_dist=trgm_dist,
@@ -187,22 +211,26 @@ class Geocoder():
             query = '''
                 SELECT
                     b.*,
-                    a.name as city,
-                    pc.postcode,
-                    {trgm_dist},
-                    ST_Centroid(b.geometry) as location
-                    {distance}
-                FROM {admin_table} a
-                JOIN {buildings_table} b
-                    ON ST_Contains(a.geometry, ST_Centroid(b.geometry))
+                    pc.postcode
+                FROM (
+                    SELECT
+                        b.*,
+                        a.name as city,
+                        {trgm_dist},
+                        ST_Centroid(b.geometry) as location
+                        {distance}
+                    FROM {admin_table} a
+                    JOIN {buildings_table} b
+                        ON ST_Intersects(a.geometry, b.geometry)
+                    WHERE
+                        a.name %% %s
+                        AND a.admin_level = 6
+                        AND ({where})
+                    ORDER BY {order_by_distance} trgm_dist ASC
+                    LIMIT {limit}
+                ) b
                 LEFT JOIN {postcode_table} pc
-                    ON ST_Contains(pc.geometry, ST_Centroid(b.geometry))
-                WHERE
-                    a.name %% %s
-                    AND a.admin_level = 6
-                    AND ({where})
-                ORDER BY {order_by_distance} trgm_dist DESC
-                LIMIT {limit};
+                    ON ST_Intersects(pc.geometry, b.geometry)
             '''.format(
                 trgm_dist=trgm_dist,
                 distance=distance,
@@ -223,19 +251,26 @@ class Geocoder():
                 SELECT
                     b.*,
                     pc.postcode,
-                    a.name as city,
-                    {trgm_dist},
-                    ST_Centroid(b.geometry) as location
-                    {distance}
-                FROM {buildings_table} b
-                LEFT JOIN {postcode_table} pc
-                ON ST_Contains(pc.geometry, ST_Centroid(b.geometry))
-                LEFT JOIN {admin_table} a
-                    ON (a.admin_level = 6 AND ST_Contains(a.geometry, ST_Centroid(b.geometry)))
-                WHERE
-                    {where}
-                ORDER BY {order_by_distance} trgm_dist DESC
-                LIMIT {limit};
+                    a.name as city
+                FROM (
+                    SELECT
+                        b.*,
+                        {trgm_dist},
+                        ST_Centroid(b.geometry) as location
+                        {distance}
+                    FROM
+                        {buildings_table} b
+                    WHERE
+                        {where}
+                    ORDER BY
+                        {order_by_distance}
+                        trgm_dist ASC
+                    LIMIT {limit}
+                ) b
+                LEFT JOIN osm_postal_code pc
+                    ON ST_Intersects(pc.geometry, b.geometry)
+                LEFT JOIN osm_admin a
+                    ON (a.admin_level = 6 AND ST_Intersects(a.geometry, b.geometry))
             '''.format(
                 trgm_dist=trgm_dist,
                 distance=distance,
@@ -248,7 +283,13 @@ class Geocoder():
             )
 
         # run the geocoding query
-        cursor.execute(query, v)
+        try:
+            cursor.execute(query, v)
+        except psycopg2.ProgrammingError as e:
+            print(parsed_address)
+            print(query)
+            print(v)
+            raise e
 
         for result in cursor:
             yield result
