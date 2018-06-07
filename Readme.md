@@ -88,7 +88,75 @@ workon osmgeocoder
 gunicorn postal_service:app \
     --bind 127.0.0.1:3200 \
     --workers 1 \
-    --pid /var/run/postal_service.pid
-    --log-file /var/log/postal_service.log
+    --pid /var/run/postal_service.pid \
+    --log-file /var/log/postal_service.log \
     --daemon
 ```
+
+## Running a HTTP geocoding service
+
+The file `geocoder_service.py` is a simple Flask app to present the geocoder as a HTTP service.
+
+### Installation
+
+```bash
+workon osmgeocoder
+pip install gunicorn
+pip install flask
+```
+
+You will need a working config file too.
+
+### Run the service
+
+The service will search for a config file in the following places:
+- `~/.osmgeocoderrc`
+- `~/.config/osmgeocoder.json`
+- `/etc/osmgeocoder.json`
+- `osmgeocoder.json`
+
+You can override the path by setting the environment variable `GEOCODER_CONFIG`.
+
+Gunicorn example:
+
+```bash
+workon osmgeocoder
+gunicorn geocoder_service:app \
+    --env 'GEOCODER_CONFIG=config/config.json'
+    --bind 127.0.0.1:8080 \
+    --workers 4 \
+    --pid /var/run/osmgeocoder_service.pid \
+    --log-file /var/log/osmgeocoder_service.log \
+    --daemon
+```
+
+## Config file
+
+Example:
+
+```json
+{
+  "db": {
+    "dbname": "osm",
+    "user": "johannes",
+    "password": "design"
+  },
+  "tables":{
+    "buildings": "osm_buildings",
+    "roads": "osm_roads",
+    "postcode": "osm_postal_code",
+    "admin": "osm_admin"
+  },
+  "opencage_data_file": "doc/worldwide.yaml",
+  "postal_service_url": "http://localhost:3200/",
+  "postal_service_port": 3200
+}
+```
+
+Keys:
+
+- `db`: Database configuration this will be built into a [Postgres connection string](https://www.postgresql.org/docs/current/static/libpq-connect.html#id-1.7.3.8.3.5)
+- `tables`: Table names to use, if you use the supplied imposm mapping you can just use the values from the example
+- `opencage_data_file`: Data file for the address formatter
+- `postal_service_url`: URL where to find the libpostal service
+- `postal_service_port`: Optional, only used when running the libpostal service directly without explicitly using gunicorn
