@@ -16,12 +16,6 @@ tables:
     - key: addr:street
       name: road
       type: string
-    - key: addr:postcode
-      name: postcode
-      type: string
-    - key: addr:city
-      name: city
-      type: string
     - key: addr:housenumber
       name: house_number
       type: string
@@ -46,12 +40,6 @@ tables:
       type: mapping_value
     - key: name
       name: road
-      type: string
-    - key: addr:postcode
-      name: postcode
-      type: string
-    - key: addr:city
-      name: city
       type: string
     - name: class
       type: mapping_key

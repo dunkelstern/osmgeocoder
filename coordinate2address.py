@@ -1,6 +1,6 @@
 import argparse
 import json
-from osmgeocoder import *
+from osmgeocoder import Geocoder
 
 
 parser = argparse.ArgumentParser(description='OSM Coordinate search')
@@ -29,13 +29,11 @@ config = {}
 with open(args.config[0], "r") as fp:
     config = json.load(fp)
 
-db = init_db(config)
-
-
-address = geocode_reverse(db, args.lat, args.lon)
+geocoder = Geocoder(config)
+address = geocoder.reverse(args.lat, args.lon)
 
 print('Resolved {}, {} to "{}"'.format(
     args.lat,
     args.lon,
-    address
+    ', '.join(address.split("\n")).strip()
 ))

@@ -1,4 +1,6 @@
-psycopg2
+psycopg2-binary
 pyproj
 shapely[vectorized]
-geographiclib
+requests
+pyyaml
+pystache

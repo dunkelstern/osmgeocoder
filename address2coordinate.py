@@ -1,6 +1,6 @@
 import argparse
 import json
-from osmgeocoder import *
+from osmgeocoder import Geocoder
 
 
 parser = argparse.ArgumentParser(description='OSM Address search')
@@ -38,7 +38,7 @@ config = {}
 with open(args.config[0], "r") as fp:
     config = json.load(fp)
 
-db = init_db(config)
+geocoder = Geocoder(config)
 
 kwargs = {}
 if args.center is not None:
@@ -46,8 +46,9 @@ if args.center is not None:
 if args.country is not None:
     kwargs['country'] = args.country[0]
 
-results = geocode_forward(db, args.address, **kwargs)
+results = geocoder.forward(args.address, **kwargs)
 
 print('Resolved "{}" to'.format(args.address))
-for result in results:
-    print(" - {} -> {}, {}".format(*result))
+for addr, lat, lon in results:
+    addr = ', '.join(addr.split("\n")).strip()
+    print(" - {} -> {}, {}".format(addr, lat, lon))

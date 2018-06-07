@@ -1,6 +1,0 @@
-{
-  "dbname": "geodjango",
-  "user": "johannes",
-  "password": "design",
-  "table": "osm_buildings"
-}
