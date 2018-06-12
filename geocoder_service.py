@@ -66,6 +66,19 @@ def reverse():
         "address": ', '.join(address.split("\n")).strip()
     })
 
+@app.route('/predict', methods=['POST'])
+def predict():
+    if not request.is_json:
+        abort(400)
+    data = request.get_json()
+    query = data.get('query', None)
+    if query is None:
+        abort(400)
+
+    predictions = list(geocoder.predict_text(query))
+    return jsonify({
+        "predictions": predictions
+    })
 
 # when running this script directly execute gunicorn to serve
 if __name__ == "__main__":

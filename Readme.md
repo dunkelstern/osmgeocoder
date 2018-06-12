@@ -20,9 +20,10 @@ $ imposm import -connection postgis://user:password@host:port/database -mapping 
 ```sql
 CREATE EXTENSION pg_trgm;
 ```
-6. Create a trigram search indices (this could take a while):
+6. Create a trigram search indices and text prediction wordlists (this could take a while):
 ```bash
 psql osm < doc/create_trigram_indexes.sql
+psql osm < doc/predict_text.sql
 ```
 7. Create a virtualenv and install packages:
 ```bash
@@ -129,6 +130,50 @@ gunicorn geocoder_service:app \
     --log-file /var/log/osmgeocoder_service.log \
     --daemon
 ```
+
+### Defined API-Endpoints
+
+#### Forward geocoding
+
+Address string to coordinate.
+
+- Endpoint `/forward`
+- Method `POST`
+- Content-Type `application/json`
+- Body:
+    - `address`: (required) User input / address to convert to coordinates
+    - `center`: (optional) Array with center coordinate to sort matches
+    - `country`: (optional) ISO Country code, use only if no center coordinate is available
+- Response: Array of objects
+    - `address`: Fully written address line, formatted by country standards
+    - `lat`: Latitude
+    - `lon`: Longitude
+
+#### Reverse geocoding
+
+Coordinate to address string.
+
+- Endpoint `/reverse`
+- Method `POST`
+- Content-Type `application/json`
+- Body:
+    - `lat`: Latitude
+    - `lon`: Longitude
+- Response: Object
+    - `address`: Nearest address to the point (building search) or `null`, formatted by country standards
+
+#### Predictive text
+
+Intelligent text completion while typing.
+
+- Endpoint `/predict`
+- Method `POST`
+- Content-Type `application/json`
+- Body:
+    - `query`: User input
+- Response: Object
+    - `predictions`: Up to 10 text predictions, sorted by equality and most common first
+
 
 ## Config file
 

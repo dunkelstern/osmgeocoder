@@ -60,6 +60,15 @@ class Geocoder():
             if item is not None:
                 return self.formatter.format(item)
 
+    def predict_text(self, input):
+        query = 'SELECT word FROM predict_text(%s)'
+
+        cursor = self.db.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(query, [input])
+
+        for result in cursor:
+            yield result['word']
+
     def _fetch_address(self, center, radius, limit=1):
         query = '''
             SELECT house, road, house_number, postcode, city, min(distance) as distance FROM (
