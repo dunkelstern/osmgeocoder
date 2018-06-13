@@ -56,9 +56,10 @@ class Geocoder():
         merc_coordinate = transform(latlonProj, mercProj, lon, lat)
 
         for radius in [25, 50, 100]:
-            item = next(self._fetch_address(merc_coordinate, radius, limit=limit))
-            if item is not None:
-                return self.formatter.format(item)
+            items = self._fetch_address(merc_coordinate, radius, limit=limit)
+            for item in items:
+                if item is not None:
+                    yield self.formatter.format(item)
 
     def predict_text(self, input):
         query = 'SELECT word FROM predict_text(%s)'

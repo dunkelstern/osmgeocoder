@@ -30,7 +30,7 @@ with open(args.config[0], "r") as fp:
     config = json.load(fp)
 
 geocoder = Geocoder(config)
-address = geocoder.reverse(args.lat, args.lon)
+address = next(geocoder.reverse(args.lat, args.lon))
 
 print('Resolved {}, {} to "{}"'.format(
     args.lat,

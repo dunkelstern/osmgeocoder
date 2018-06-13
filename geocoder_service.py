@@ -61,7 +61,7 @@ def reverse():
     if lat is None or lon is None:
         abort(400)
 
-    address = geocoder.reverse(lat, lon)
+    address = next(geocoder.reverse(lat, lon))
     return jsonify({
         "address": ', '.join(address.split("\n")).strip()
     })
