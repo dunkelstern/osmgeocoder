@@ -86,5 +86,8 @@ $$
     LIMIT 10 -- only return at most 10 predictions
 $$ LANGUAGE 'sql';
 
+-- build the list for the first time
+SELECT build_wordlist();
+
 -- use like this
 SELECT * FROM predict_text('Dickenr');
