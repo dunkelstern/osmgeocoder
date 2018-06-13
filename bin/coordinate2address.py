@@ -1,6 +1,15 @@
+#!/usr/bin/env python
+
 import argparse
 import json
-from osmgeocoder import Geocoder
+import sys
+import os
+
+try:
+    from osmgeocoder import Geocoder
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    from osmgeocoder import Geocoder
 
 
 parser = argparse.ArgumentParser(description='OSM Coordinate search')

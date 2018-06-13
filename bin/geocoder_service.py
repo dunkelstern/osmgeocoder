@@ -1,10 +1,23 @@
+#!/usr/bin/env python
+
+try:
+    from flask import Flask, jsonify, abort, request
+except ImportError:
+    print("Error: Please install Flask, `pip install flask`")
+    exit(1)
+
 import json
+import sys
 import os
-from osmgeocoder import Geocoder
 
-from flask import Flask, jsonify, abort, request
+try:
+    from osmgeocoder import Geocoder
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    from osmgeocoder import Geocoder
+
+
 app = Flask(__name__)
-
 geocoder = None
 
 @app.before_first_request

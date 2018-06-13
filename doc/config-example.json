@@ -1,8 +1,8 @@
 {
   "db": {
     "dbname": "osm",
-    "user": "johannes",
-    "password": "design"
+    "user": "osm",
+    "password": "password"
   },
   "tables":{
     "buildings": "osm_buildings",
@@ -10,7 +10,6 @@
     "postcode": "osm_postal_code",
     "admin": "osm_admin"
   },
-  "opencage_data_file": "doc/worldwide.yaml",
   "postal_service_url": "http://localhost:3200/",
   "postal_service_port": 3200
 }

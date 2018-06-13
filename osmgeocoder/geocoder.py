@@ -1,3 +1,4 @@
+import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -8,7 +9,7 @@ from pyproj import Proj, transform
 from requests import post
 from requests.exceptions import ConnectionError
 
-from .formatter import AddressFormatter
+from .format import AddressFormatter
 
 
 class Geocoder():
@@ -16,7 +17,9 @@ class Geocoder():
     def __init__(self, config):
         self.config = config
         self.db = self._init_db()
-        self.formatter = AddressFormatter(self.config['opencage_data_file'])
+
+        config_file = self.config.get('opencage_data_file', None)
+        self.formatter = AddressFormatter(config=config_file)
 
     def _init_db(self):
 
@@ -115,14 +118,15 @@ class Geocoder():
     def _fetch_coordinate(self, search_term, center=None, country=None, radius=20000, limit=20):
         cursor = self.db.cursor(cursor_factory=RealDictCursor)
 
-        try:
-            response = post(self.config['postal_service_url'] + '/split', json={"query": search_term})
-            if response.status_code == 200:
-                parsed_address = response.json()[0]
-            else:
+        if 'postal_service_url' in self.config:
+            try:
+                response = post(self.config['postal_service_url'] + '/split', json={"query": search_term})
+                if response.status_code == 200:
+                    parsed_address = response.json()[0]
+                else:
+                    parsed_address = { 'road': search_term }
+            except ConnectionError:
                 parsed_address = { 'road': search_term }
-        except ConnectionError:
-            parsed_address = { 'road': search_term }
 
         #
         # crude query builder following

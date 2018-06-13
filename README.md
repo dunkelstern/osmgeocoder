@@ -22,7 +22,7 @@ CREATE EXTENSION pg_trgm;
 ```
 6. Create a trigram search indices and text prediction wordlists (this could take a while):
 ```bash
-psql osm < doc/create_trigram_indexes.sql
+psql osm < doc/create_trigram_indices.sql
 psql osm < doc/predict_text.sql
 ```
 7. Create a virtualenv and install packages:
@@ -35,9 +35,18 @@ pip install -r requirements.txt
 9. Optionally install and start the postal machine learning address categorizer (see below)
 10. Geocode:
 ```bash
-python address2coordinate.py --config config/config.json --center 48.3849 10.8631 Lauterl
-python coordinate2address.py --config config/config.json 48.3849 10.8631
+bin/address2coordinate.py --config config/config.json --center 48.3849 10.8631 Lauterl
+bin/coordinate2address.py --config config/config.json 48.3849 10.8631
 ```
+
+**NOTE:** you can also install this via pip:
+- the scripts from the `bin` directory will be copied to your environment.
+- the SQL files will be placed in your virtualenv in `share/osmgeocoder/sql`
+- the YAML files will be placed in your virtualenv in `share/osmgeocoder/yml`
+- An example config file will be placed in your virtualenv in `share/doc/osmgeocoder/config-example.json`
+- The PIP installation will not install `flask` and `gunicorn` nor will it try to install `postal`,
+  if you want to use those services you need to install those optional dependencies yourself (read on!)
+
 
 ## Optional support for libpostal
 
@@ -71,9 +80,17 @@ pip install flask
 
 ### Run the classifier service
 
+**Source checkout:**
+
 ```bash
 workon osmgeocoder
-python postal_service.py --config config/config.json
+bin/postal_service.py --config config/config.json
+```
+
+**PIP install:**
+
+```bash
+/path/to/virtualenv/bin/postal_service.py --config config.json
 ```
 
 Attention: Depending on the speed of your disk, startup of this service may take some seconds
@@ -192,7 +209,7 @@ Example:
     "postcode": "osm_postal_code",
     "admin": "osm_admin"
   },
-  "opencage_data_file": "doc/worldwide.yaml",
+  "opencage_data_file": "doc/worldwide.yml",
   "postal_service_url": "http://localhost:3200/",
   "postal_service_port": 3200
 }
@@ -202,13 +219,15 @@ Keys:
 
 - `db`: Database configuration this will be built into a [Postgres connection string](https://www.postgresql.org/docs/current/static/libpq-connect.html#id-1.7.3.8.3.5)
 - `tables`: Table names to use, if you use the supplied imposm mapping you can just use the values from the example
-- `opencage_data_file`: Data file for the address formatter
-- `postal_service_url`: URL where to find the libpostal service
-- `postal_service_port`: Optional, only used when running the libpostal service directly without explicitly using gunicorn
+- `postal_service_url`: (optional) URL where to find the libpostal service, if not supplied searching is reduced to street names only
+- `postal_service_port`: (optional) only used when running the libpostal service directly without explicitly using gunicorn
+- `opencage_data_file`: (optional) Data file for the address formatter, defaults to the one included in the package
 
 ## API documentation
 
-The complete project contains actually one single class `Geocoder`.
+The complete project contains actually only two classes:
+
+### `Geocoder`.
 
 Publicly accessible method prototypes are:
 
@@ -226,12 +245,12 @@ def predict_text(self, input):
     pass
 ```
 
-### `__init__`
+#### `__init__`
 
 Initialize a geocoder, this will read all files to be used and set up the DB connection.
 - `config`: Dictionary with configuration values, see __Config File__ above for used keys.
 
-### `forward`
+#### `forward`
 
 Geocode an address to a lat, lon location.
 - `address`: Address to code
@@ -240,7 +259,7 @@ Geocode an address to a lat, lon location.
 
 This function is a generator which `yield`s the obtained results.
 
-### `reverse`
+#### `reverse`
 
 Geocode a lat, lon location into a readable address:
 - `lat`: Latitude to code
@@ -249,7 +268,7 @@ Geocode a lat, lon location into a readable address:
 
 This function is a generator which `yield`s the obtained results.
 
-### `predict_text`
+#### `predict_text`
 
 Return possible text prediction results for the user input. This could be used while the user is typing their query to reduce the load on the database (by avoiding typos and running fewer requests against the geocoder because the user skips over typing long words one character by each).
 - `input`: User input
@@ -257,3 +276,45 @@ Return possible text prediction results for the user input. This could be used w
 This function is a generator which `yield`s the obtained results.
 
 **ATTENTION**: Do not feed complete "sentences" into this function as it will not yield the expected result, tokenize into words on client side and only request predictions for the current word the user is editing.
+
+
+### `AddressFormatter`
+
+Publicly accessible method prototypes are:
+
+```python
+def __init__(self, config=None):
+    pass
+
+def format(self, address, country=None):
+    pass
+```
+
+#### `__init__`
+
+Initialize the address formatter
+- `config`: (optional) override default config file to use for the address formatter, defaults to config file included in this package
+
+#### `format`
+
+Format an address in the default layout used in the specified country. Return value may contain line breaks.
+- `address`: Dictionary that contains the address parts, see below for recognized keys
+- `country`: Country code of the formatting template to use
+
+Recognized keys in `address`:
+- `attention`
+- `house`
+- `road`
+- `house_number`
+- `postcode`
+- `city`
+- `town`
+- `village`
+- `county`
+- `state`
+- `country`
+- `suburb`
+- `city_district`
+- `state_district`
+- `state_code`
+- `neighbourhood`
