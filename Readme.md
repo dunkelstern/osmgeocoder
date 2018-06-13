@@ -205,3 +205,55 @@ Keys:
 - `opencage_data_file`: Data file for the address formatter
 - `postal_service_url`: URL where to find the libpostal service
 - `postal_service_port`: Optional, only used when running the libpostal service directly without explicitly using gunicorn
+
+## API documentation
+
+The complete project contains actually one single class `Geocoder`.
+
+Publicly accessible method prototypes are:
+
+```python
+def __init__(self, config):
+    pass
+
+def forward(self, address, country=None, center=None):
+    pass
+
+def reverse(self, lat, lon, limit=10):
+    pass
+
+def predict_text(self, input):
+    pass
+```
+
+### `__init__`
+
+Initialize a geocoder, this will read all files to be used and set up the DB connection.
+- `config`: Dictionary with configuration values, see __Config File__ above for used keys.
+
+### `forward`
+
+Geocode an address to a lat, lon location.
+- `address`: Address to code
+- `country`: (optional) Country code to restrict search and format address
+- `center`: (optional) Center coordinate to sort results for (will be used to determine country too, so you can skip the `country` flag)
+
+This function is a generator which `yield`s the obtained results.
+
+### `reverse`
+
+Geocode a lat, lon location into a readable address:
+- `lat`: Latitude to code
+- `lon`: Longitute to code
+- `limit`: (optional) maximum number of results to return
+
+This function is a generator which `yield`s the obtained results.
+
+### `predict_text`
+
+Return possible text prediction results for the user input. This could be used while the user is typing their query to reduce the load on the database (by avoiding typos and running fewer requests against the geocoder because the user skips over typing long words one character by each).
+- `input`: User input
+
+This function is a generator which `yield`s the obtained results.
+
+**ATTENTION**: Do not feed complete "sentences" into this function as it will not yield the expected result, tokenize into words on client side and only request predictions for the current word the user is editing.
