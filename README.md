@@ -16,9 +16,10 @@ Python implementation for a OSM Geocoder
 ```bash
 $ imposm import -connection postgis://user:password@host:port/database -mapping doc/imposm_mapping.yml -read /path/to/osm.pbf -write -deployproduction -optimize
 ```
-5. Create the trigram search extension for the DB:
+5. Create the trigram and fuzzy string search extension for the DB:
 ```sql
 CREATE EXTENSION pg_trgm;
+CREATE EXTENSION fuzzystrmatch;
 ```
 6. Create a trigram search indices and text prediction wordlists (this could take a while):
 ```bash
