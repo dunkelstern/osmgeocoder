@@ -40,8 +40,15 @@ setup(
             'bin/postal_service.py',
         ],
         data_files = [
-            ('share/osmgeocoder/sql', [ 'doc/create_trigram_indices.sql', 'doc/predict_text.sql' ]),
-            ('share/osmgeocoder/yml', [ 'doc/imposm_mapping.yml', 'doc/worldwide.yml' ]),
+            ('share/osmgeocoder/sql', [
+                'sql/001-create_trigram_indices.sql',
+                'sql/002-wordlist_for_text_prediction',
+                'sql/003-text_prediction.sql'
+            ]),
+            ('share/osmgeocoder/yml', [ 
+                'doc/imposm_mapping.yml', 
+                'data/worldwide.yml'
+            ]),
             ('share/doc/osmgeocoder', [ 'doc/config-example.json'])
         ],
         install_requires=[
