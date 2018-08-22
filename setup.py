@@ -38,6 +38,7 @@ setup(
             'bin/coordinate2address.py',
             'bin/geocoder_service.py',
             'bin/postal_service.py',
+            'bin/import_openaddress_data.py',
         ],
         data_files = [
             ('share/osmgeocoder/sql', [
