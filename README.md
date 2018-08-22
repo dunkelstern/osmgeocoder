@@ -6,6 +6,9 @@ Python implementation for a OSM Geocoder
 ## TODO
 
 - Do not run geocoder on buildings only, probably roads and distances are possible
+- Implement geocoding on openaddresses.io data
+- Implement city-autofill for the openaddresses.io data (postal code is given in that case)
+- Speed up openaddresses.io import (currently only uses one CPU core)
 
 ## Quick and dirty how-to
 
@@ -32,9 +35,10 @@ mkvirtualenv -p /usr/bin/python3 osmgeocoder
 workon osmgeocoder
 pip install -r requirements.txt
 ```
-8. Modify configuration file to match your setup. The example config is in `config/config.json`.
+8. Modify configuration file to match your setup. The example config is in `doc/config-example.json`.
 9. Optionally install and start the postal machine learning address categorizer (see below)
-10. Geocode:
+10. Optionally import openaddresses.io data
+11. Geocode:
 ```bash
 bin/address2coordinate.py --config config/config.json --center 48.3849 10.8631 Lauterl
 bin/coordinate2address.py --config config/config.json 48.3849 10.8631
@@ -112,6 +116,31 @@ gunicorn postal_service:app \
     --daemon
 ```
 
+## Optional import of openaddresses.io data
+
+For some countries there are not enough buildings tagged in the OSM data so we can use the
+[OpenAddresses.io](http://results.openaddresses.io) data to augment the OSM data.
+
+The import is relatively slow as the data is contained in a big bunch of zipped CSV files.
+
+### Importing openaddresses.io data
+
+```bash
+workon osmgeocoder
+wget https://s3.amazonaws.com/data.openaddresses.io/openaddr-collected-europe.zip
+import_openaddress_data.py --db postgresql://localhost/osm openaddr-collected-europe.zip
+```
+
+When you have imported the data it will create two more tables in your DB, `oa_license` which contains
+the licenses of the imported data (the API will return the license attribution string with the data) and
+`oa_data` which contains the imported data.
+
+If you want to import more than one file, just do so, the tables will not be cleared between import runs,
+the indices will be dropped and rebuilt after the import though.
+
+The geocoder class will automatically detect the two imported tables and use them if the OSM queries did not
+return a sufficiently exact result.
+
 ## Running a HTTP geocoding service
 
 The file `geocoder_service.py` is a simple Flask app to present the geocoder as a HTTP service.
@@ -166,6 +195,7 @@ Address string to coordinate.
     - `address`: Fully written address line, formatted by country standards
     - `lat`: Latitude
     - `lon`: Longitude
+    - `license`: License attribution string
 
 #### Reverse geocoding
 
@@ -179,6 +209,7 @@ Coordinate to address string.
     - `lon`: Longitude
 - Response: Object
     - `address`: Nearest address to the point (building search) or `null`, formatted by country standards
+    - `license`: License attribution string
 
 #### Predictive text
 
