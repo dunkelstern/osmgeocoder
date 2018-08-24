@@ -75,25 +75,34 @@ def prepare_db(db):
         ALTER TABLE oa_city DROP CONSTRAINT IF EXISTS oa_city_license_id_fk;
         ALTER TABLE oa_street DROP CONSTRAINT IF EXISTS oa_street_city_id_fk;
         ALTER TABLE oa_house DROP CONSTRAINT IF EXISTS oa_house_street_id_fk;
+        DROP INDEX IF EXISTS oa_street_city_id_idx;
+        DROP INDEX IF EXISTS oa_house_street_id_idx;
         DROP INDEX IF EXISTS oa_data_location_geohash_idx;
         DROP INDEX IF EXISTS oa_data_location_idx;
+    ''')
+
+def finalize_db(db):
+    db.execute('''
+        CREATE INDEX oa_street_city_id_idx ON oa_street USING BTREE(city_id);
+        CREATE INDEX oa_house_street_id_idx ON oa_house USING BTREE(street_id);
+        ANALYZE oa_city;
+        ANALYZE oa_street;
+        ANALYZE oa_house;
+        ALTER TABLE oa_city ADD CONSTRAINT oa_city_license_id_fk FOREIGN KEY (license_id) REFERENCES oa_license (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
+        ALTER TABLE oa_street ADD CONSTRAINT oa_street_city_id_fk FOREIGN KEY (city_id) REFERENCES oa_city (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
+        ALTER TABLE oa_house ADD CONSTRAINT oa_house_street_id_fk FOREIGN KEY (street_id) REFERENCES oa_street (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
     ''')
 
 def optimize_db(db):
     print('Adding indexes...')
     db.execute('''
-        CREATE INDEX oa_city_id_idx ON oa_city USING BTREE(id);
-        CREATE INDEX oa_street_id_idx ON oa_street USING BTREE(id);
-        CREATE INDEX oa_house_id_idx ON oa_house USING BTREE(id);
-        ALTER TABLE oa_city ADD CONSTRAINT oa_city_license_id_fk FOREIGN KEY (license_id) REFERENCES oa_license (id) ON DELETE CASCADE INITIALLY DEFERRED;
-        ALTER TABLE oa_street ADD CONSTRAINT oa_street_city_id_fk FOREIGN KEY (city_id) REFERENCES oa_city (id) ON DELETE CASCADE INITIALLY DEFERRED;
-        ALTER TABLE oa_house ADD CONSTRAINT oa_house_street_id_fk FOREIGN KEY (street_id) REFERENCES oa_street (id) ON DELETE CASCADE INITIALLY DEFERRED;
-        CREATE INDEX oa_house_location_geohash_idx ON oa_data (ST_GeoHash(ST_Transform(location, 4326)));
-        CREATE INDEX oa_house_location_idx ON oa_data USING GIST(location);
+        CREATE INDEX oa_house_location_geohash_idx ON oa_house (ST_GeoHash(ST_Transform(location, 4326)));
+        CREATE INDEX oa_house_location_idx ON oa_house USING GIST(location);
+        ANALYZE oa_house;
     ''')
 
     print('Clustering on geohash...')
-    db.execute('CLUSTER oa_house ON oa_house_location_geohash_idx;')
+    db.execute('CLUSTER oa_house USING oa_house_location_geohash_idx;')
 
 def close_db(db):
     conn = db.connection
@@ -138,8 +147,8 @@ def import_licenses(license_data, db):
             if a != 'Yes':
                 record['attribution'] = a
         elif len(line) == 0:
-            if record['license'] == 'Unknown':
-                continue
+            # if record['license'] == 'Unknown':
+            #     continue
             fname = record['file'] + '.csv'
             licenses[fname] = save_license(record, db)
             print('Saved license for {}: {}'.format(fname, licenses[fname]))
@@ -149,7 +158,7 @@ def import_licenses(license_data, db):
                 'website': None,
                 'license': None,
                 'attribution': None
-            }            
+            }
         else:
             record['file'] = line.decode('utf-8').strip()
 
@@ -193,7 +202,7 @@ def import_csv(csv_data, license_id, name, db, line):
                 ),
                 'houses': {}
             }
-        
+
         cities[cty]['streets'][strt]['houses'][row['NUMBER']] = (row['LON'], row['LAT'])
 
     del reader
@@ -241,7 +250,7 @@ def import_csv(csv_data, license_id, name, db, line):
 
             execute_batch(db, 'EXECUTE house (%s, %s, %s, %s);' , aggregate)
 
-            if time() - timeout > 1.0: 
+            if time() - timeout > 1.0:
                 eta = (len(cities) / city_count * (time() - start)) - (time() - start)
                 print("\033[{};0H\033[K - {:40}, {:>6}%, {:>6} rows/second, eta: {:>5} seconds".format(
                     line, name, round((city_count / len(cities) * 100), 2), row_count, int(eta)
@@ -292,8 +301,9 @@ def import_data(filename, threads, db_url):
         with Pool(threads, maxtasksperchild=1) as p:
             p.starmap(worker, import_queue, 1)
 
+    print("\033[2J")
     db = open_db(args.db_url)
-    optimize_db(db)
+    finalize_db(db)
     close_db(db)
 
 
@@ -306,7 +316,6 @@ def worker(filename, name, license_id, db_url, status):
     seen_lines.sort()
     for idx, l in enumerate(seen_lines):
         if idx != l:
-            print(idx, l)
             status[name] = idx
             break
     if status[name] == -1:
@@ -349,6 +358,13 @@ def parse_cmdline():
         help='Drop tables before importing'
     )
     parser.add_argument(
+        '--optimize',
+        dest='optimize',
+        default=False,
+        action='store_true',
+        help='Re-create indices and cluster the tables on the indices for speed'
+    )
+    parser.add_argument(
         'datafile',
         type=str,
         help='OpenAddresses.io data file (zipped)'
@@ -364,3 +380,5 @@ if __name__ == '__main__':
         clear_db(db)
         close_db(db)
     import_data(args.datafile, args.threads, args.db_url)
+    if args.optimize:
+        db = open_db(args.db_url)
