@@ -39,7 +39,7 @@ def init():
     with open(config_file, "r") as fp:
         config = json.load(fp)
 
-    geocoder = Geocoder(config)
+    geocoder = Geocoder(**config)
 
 
 @app.route('/forward', methods=['POST'])

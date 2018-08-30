@@ -26,7 +26,7 @@ class AddressFormatter():
 
             # if not found, assume we have been started from a source checkout
             if not os.path.exists(config):
-                config = os.path.abspath(os.path.join(my_dir, '../doc/worldwide.yml'))
+                config = os.path.abspath(os.path.join(my_dir, '../data/worldwide.yml'))
 
         with open(config, 'r') as fp:
             self.model = yaml.load(fp)
@@ -39,5 +39,10 @@ class AddressFormatter():
         if fmt is None:
             raise RuntimeError("Configuration file for address formatter has no default value!")
 
-        address['first'] = first(address)
-        return pystache.render(fmt['address_template'], address).strip()
+        cleaned_address = {}
+        for key, value in address.items():
+            if value is not None:
+                cleaned_address[key] = value
+
+        cleaned_address['first'] = first(cleaned_address)
+        return pystache.render(fmt['address_template'], cleaned_address).strip()

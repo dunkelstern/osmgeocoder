@@ -29,4 +29,4 @@ $$
 $$ LANGUAGE 'sql';
 
 -- use like this
-SELECT * FROM predict_text('Dickenr');
+-- SELECT * FROM predict_text('Dickenr');

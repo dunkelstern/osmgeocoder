@@ -5,39 +5,39 @@ Python implementation for a OSM Geocoder
 
 ## TODO
 
-- Do not run geocoder on buildings only, probably roads and distances are possible
-- Implement geocoding on openaddresses.io data
-- Implement city-autofill for the openaddresses.io data (postal code is given in that case)
-- Speed up openaddresses.io import (currently only uses one CPU core)
+- Implement forward geocoding on openaddresses.io data
+- Speed up openaddresses.io import, we could write a `COPY`-able import file for postgres probably.
+- Return Attribution in API and in webservices
 
 ## Quick and dirty how-to
 
-1. Create a PostgreSQL Database with PostGIS activated
-2. Fetch a copy of [imposm3](https://github.com/omniscale/imposm3)
-3. Get a OpenStreetMap data file (for example from [Geofabrik](http://download.geofabrik.de/), start with a small region!)
-4. Import some OpenStreetMap data into the DB:
-```bash
-$ imposm import -connection postgis://user:password@host:port/database -mapping doc/imposm_mapping.yml -read /path/to/osm.pbf -write -deployproduction -optimize
-```
-5. Create the trigram and fuzzy string search extension for the DB:
+1. Create a PostgreSQL Database
+2. Create the PostGIS, trigram and fuzzy string search extension for the DB:
 ```sql
+CREATE EXTENSION postgis;
 CREATE EXTENSION pg_trgm;
 CREATE EXTENSION fuzzystrmatch;
 ```
-6. Create a trigram search indices and text prediction wordlists (this could take a while):
+3. Fetch a copy of [imposm3](https://github.com/omniscale/imposm3)
+4. Get a OpenStreetMap data file (for example from [Geofabrik](http://download.geofabrik.de/), start with a small region!)
+5. Import some OpenStreetMap data into the DB (grab a coffee or two):
 ```bash
-psql osm < doc/create_trigram_indices.sql
-psql osm < doc/predict_text.sql
+$ imposm import -connection postgis://user:password@host:port/database -mapping doc/imposm_mapping.yml -read /path/to/osm.pbf -write -deployproduction -optimize
 ```
-7. Create a virtualenv and install packages:
+6. Create a virtualenv and install packages:
 ```bash
 mkvirtualenv -p /usr/bin/python3 osmgeocoder
 workon osmgeocoder
 pip install -r requirements.txt
 ```
-8. Modify configuration file to match your setup. The example config is in `doc/config-example.json`.
+7. Modify configuration file to match your setup. The example config is in `doc/config-example.json`.
+8. Create a trigram search indices and text prediction wordlists (this could take a while, grab another coffee or take a nap) and prepare the Database:
+```bash
+workon osmgeocoder
+bin/prepare_osm.py
+```
 9. Optionally install and start the postal machine learning address categorizer (see below)
-10. Optionally import openaddresses.io data
+10. Optionally import openaddresses.io data (see below, and yes, grab another coffee)
 11. Geocode:
 ```bash
 bin/address2coordinate.py --config config/config.json --center 48.3849 10.8631 Lauterl
@@ -116,30 +116,31 @@ gunicorn postal_service:app \
     --daemon
 ```
 
+**Attention**: Every worker takes that 2GB RAM toll!
+
 ## Optional import of openaddresses.io data
 
-For some countries there are not enough buildings tagged in the OSM data so we can use the
-[OpenAddresses.io](http://results.openaddresses.io) data to augment the OSM data.
+For some countries there are not enough buildings tagged in the OSM data so we can use the [OpenAddresses.io](http://results.openaddresses.io) data to augment the OSM data.
 
-The import is relatively slow as the data is contained in a big bunch of zipped CSV files.
+The import is relatively slow as the data is contained in a big bunch of zipped CSV files, we try to use more threads to import the data faster but it could take a while...
 
 ### Importing openaddresses.io data
 
 ```bash
 workon osmgeocoder
 wget https://s3.amazonaws.com/data.openaddresses.io/openaddr-collected-europe.zip
-import_openaddress_data.py --db postgresql://localhost/osm openaddr-collected-europe.zip
+import_openaddress_data.py \
+    --db postgresql://localhost/osm \
+    --threads 4 \
+    --optimize \
+    openaddr-collected-europe.zip
 ```
 
-When you have imported the data it will create two more tables in your DB, `oa_license` which contains
-the licenses of the imported data (the API will return the license attribution string with the data) and
-`oa_data` which contains the imported data.
+When you have imported the data it will create some tables in your DB, `oa_license` which contains the licenses of the imported data (the API will return the license attribution string with the data), `oa_city` which is a foreign key target from `oa_street` which in turn is a fk target to `oa_house` which contains the imported data.
 
-If you want to import more than one file, just do so, the tables will not be cleared between import runs,
-the indices will be dropped and rebuilt after the import though.
+If you want to import more than one file, just do so, the tables will not be cleared between import runs, the indices will be dropped and rebuilt after the import though. (Skip the `--optimize` flag for the first import and only append it on the last file you import to save some time)
 
-The geocoder class will automatically detect the two imported tables and use them if the OSM queries did not
-return a sufficiently exact result.
+The geocoder class will automatically detect the two imported tables and use them if the OSM queries did not return a sufficiently exact result.
 
 ## Running a HTTP geocoding service
 
@@ -232,27 +233,22 @@ Example:
 {
   "db": {
     "dbname": "osm",
-    "user": "johannes",
-    "password": "design"
-  },
-  "tables":{
-    "buildings": "osm_buildings",
-    "roads": "osm_roads",
-    "postcode": "osm_postal_code",
-    "admin": "osm_admin"
+    "user": "osm",
+    "password": "password"
   },
   "opencage_data_file": "doc/worldwide.yml",
-  "postal_service_url": "http://localhost:3200/",
-  "postal_service_port": 3200
+  "postal": {
+    "service_url": "http://localhost:3200/",
+    "port": 3200
+  }
 }
 ```
 
 Keys:
 
 - `db`: Database configuration this will be built into a [Postgres connection string](https://www.postgresql.org/docs/current/static/libpq-connect.html#id-1.7.3.8.3.5)
-- `tables`: Table names to use, if you use the supplied imposm mapping you can just use the values from the example
-- `postal_service_url`: (optional) URL where to find the libpostal service, if not supplied searching is reduced to street names only
-- `postal_service_port`: (optional) only used when running the libpostal service directly without explicitly using gunicorn
+- `postal` -> `service_url`: (optional) URL where to find the libpostal service, if not supplied searching is reduced to street names only
+- `postal` -> `port`: (optional) only used when running the libpostal service directly without explicitly using gunicorn
 - `opencage_data_file`: (optional) Data file for the address formatter, defaults to the one included in the package
 
 ## API documentation

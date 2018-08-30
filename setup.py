@@ -10,7 +10,7 @@ with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
 
 setup(
         name='osmgeocoder',
-        version='1.0.0',
+        version='1.1.0',
         description='OpenStreetMap based geocoder',
         long_description=README,
         long_description_content_type='text/markdown',
@@ -22,13 +22,13 @@ setup(
         classifiers=[
             'Development Status :: 5 - Production/Stable',
             'Intended Audience :: Developers',
-            'Topic :: Software Development :: Testing',
             'License :: OSI Approved :: BSD License',
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
             'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
             'Operating System :: OS Independent'
         ],
         keywords='osm openstreetmap geocoding geocoder',
@@ -39,12 +39,17 @@ setup(
             'bin/geocoder_service.py',
             'bin/postal_service.py',
             'bin/import_openaddress_data.py',
+            'bin/prepare_osm.py'
         ],
         data_files = [
             ('share/osmgeocoder/sql', [
                 'sql/001-create_trigram_indices.sql',
                 'sql/002-wordlist_for_text_prediction',
-                'sql/003-text_prediction.sql'
+                'sql/003-text_prediction.sql',
+                'sql/004-openaddress_tables.sql',
+                'sql/005-custom_types.sql',
+                'sql/006-forward_geocoding.sql',
+                'sql/007-reverse_geocoding.sql'
             ]),
             ('share/osmgeocoder/yml', [ 
                 'doc/imposm_mapping.yml', 

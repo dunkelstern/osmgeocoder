@@ -8,7 +8,7 @@ import os
 try:
     from osmgeocoder import Geocoder
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from osmgeocoder import Geocoder
 
 
@@ -38,7 +38,7 @@ config = {}
 with open(args.config[0], "r") as fp:
     config = json.load(fp)
 
-geocoder = Geocoder(config)
+geocoder = Geocoder(**config)
 address = next(geocoder.reverse(args.lat, args.lon))
 
 print('Resolved {}, {} to "{}"'.format(
