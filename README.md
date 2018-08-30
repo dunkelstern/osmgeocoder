@@ -1,7 +1,18 @@
 # OSMGeocoder
 
-Python implementation for a OSM Geocoder
-(Only works on Python 3 for now)
+Python implementation for a OSM Geocoder.
+
+This geocoder is implemented in PostgreSQL DB functions as much as possible, there is a simple API and an example flask app included.
+
+You will need PostgreSQL 9.4+ with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
+
+Data import will be done via [Omniscale's imposm3](https://github.com/omniscale/imposm3) and a supplied python script to import the openaddresses.io data.
+
+Optionally you can use the [libpostal machine learning address classifier](https://github.com/openvenues/libpostal) to parse addresses supplied as input to the forward geocoder.
+
+For formatting the addresses from the reverse geocoder the `worldwide.yml` from [OpenCageData address-formatting repository](https://github.com/OpenCageData/address-formatting) is used to format the address according to customs in the country that is been encoded.
+
+See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) for more information.
 
 ## TODO
 
