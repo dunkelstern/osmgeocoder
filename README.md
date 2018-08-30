@@ -46,9 +46,9 @@ bin/coordinate2address.py --config config/config.json 48.3849 10.8631
 
 **NOTE:** you can also install this via pip:
 - the scripts from the `bin` directory will be copied to your environment.
-- the SQL files will be placed in your virtualenv in `share/osmgeocoder/sql`
-- the YAML files will be placed in your virtualenv in `share/osmgeocoder/yml`
-- An example config file will be placed in your virtualenv in `share/doc/osmgeocoder/config-example.json`
+- the SQL files will be placed in your virtualenv in `osmgeocoder/data/sql`
+- the YAML files will be placed in your virtualenv in `osmgeocoder/data/yml`
+- An example config file will be placed in your virtualenv in `osmgeocoder/data/config-example.json`
 - The PIP installation will not install `flask` and `gunicorn` nor will it try to install `postal`,
   if you want to use those services you need to install those optional dependencies yourself (read on!)
 
@@ -191,7 +191,7 @@ Address string to coordinate.
 - Body:
     - `address`: (required) User input / address to convert to coordinates
     - `center`: (optional) Array with center coordinate to sort matches
-    - `country`: (optional) ISO Country code, use only if no center coordinate is available
+    - `country`: (optional) ISO Country code, use only if no center coordinate is available as it slows down the geocoder massively.
 - Response: Array of objects
     - `address`: Fully written address line, formatted by country standards
     - `lat`: Latitude
@@ -236,7 +236,7 @@ Example:
     "user": "osm",
     "password": "password"
   },
-  "opencage_data_file": "doc/worldwide.yml",
+  "opencage_data_file": "data/worldwide.yml",
   "postal": {
     "service_url": "http://localhost:3200/",
     "port": 3200
@@ -276,7 +276,11 @@ def predict_text(self, input):
 #### `__init__`
 
 Initialize a geocoder, this will read all files to be used and set up the DB connection.
-- `config`: Dictionary with configuration values, see __Config File__ above for used keys.
+- `db`: Dictionary with DB config
+- `address_formatter_config`: Path to the `worldwide.yaml` (optional)
+- `postal`: Dictionary with postal config (`service_url` and `port` keys)
+
+see __Config File__ above for more info.
 
 #### `forward`
 

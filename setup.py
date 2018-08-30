@@ -4,15 +4,25 @@ from setuptools import setup
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-# load readme
-with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
-    README = readme.read()
-
 setup(
         name='osmgeocoder',
         version='1.1.0',
-        description='OpenStreetMap based geocoder',
-        long_description=README,
+        description='OpenStreetMap and OpenAddresses.io based geocoder',
+        long_description='''
+            Python implementation for a OSM Geocoder.
+
+            This geocoder is implemented in PostgreSQL DB functions as much as possible, there is a simple API and an example flask app included.
+
+            You will need PostgreSQL 9.4+ with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
+
+            Data import will be done via [Omniscale's imposm3](https://github.com/omniscale/imposm3) and a supplied python script to import the openaddresses.io data.
+
+            Optionally you can use the [libpostal machine learning address classifier](https://github.com/openvenues/libpostal) to parse addresses supplied as input to the forward geocoder.
+
+            For formatting the addresses from the reverse geocoder the `worldwide.yml` from [OpenCageData address-formatting repository](https://github.com/OpenCageData/address-formatting) is used to format the address according to customs in the country that is been encoded.
+
+            See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) for more information.
+        ''',
         long_description_content_type='text/markdown',
         url='https://github.com/dunkelstern/osmgeocoder',
         author='Johannes Schriewer',
@@ -31,7 +41,7 @@ setup(
             'Programming Language :: Python :: 3.7',
             'Operating System :: OS Independent'
         ],
-        keywords='osm openstreetmap geocoding geocoder',
+        keywords='osm openstreetmap geocoding geocoder openaddresses.io',
         packages=['osmgeocoder'],
         scripts=[
             'bin/address2coordinate.py',
@@ -40,22 +50,6 @@ setup(
             'bin/postal_service.py',
             'bin/import_openaddress_data.py',
             'bin/prepare_osm.py'
-        ],
-        data_files = [
-            ('share/osmgeocoder/sql', [
-                'sql/001-create_trigram_indices.sql',
-                'sql/002-wordlist_for_text_prediction',
-                'sql/003-text_prediction.sql',
-                'sql/004-openaddress_tables.sql',
-                'sql/005-custom_types.sql',
-                'sql/006-forward_geocoding.sql',
-                'sql/007-reverse_geocoding.sql'
-            ]),
-            ('share/osmgeocoder/yml', [ 
-                'doc/imposm_mapping.yml', 
-                'data/worldwide.yml'
-            ]),
-            ('share/doc/osmgeocoder', [ 'doc/config-example.json'])
         ],
         install_requires=[
             'psycopg2-binary >= 2.7',

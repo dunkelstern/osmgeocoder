@@ -1,0 +1,4 @@
+include osmgeocoder/data/sql/*.sql
+include osmgeocoder/data/config-example.json
+include osmgeocoder/data/imposm_mapping.yml
+include osmgeocoder/data/worldwide.yml

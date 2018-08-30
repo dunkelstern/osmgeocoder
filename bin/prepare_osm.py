@@ -5,6 +5,7 @@ import psycopg2
 from time import time
 import io
 import os
+from pkg_resources import resource_exists, resource_listdir, resource_string
 
 #
 # DB-Utility functions
@@ -16,22 +17,31 @@ def open_db(url):
     return cursor
 
 def prepare_db(db):
-    my_dir = os.path.dirname(os.path.abspath(__file__))
-
     # assume we are in a virtualenv first
-    sql_path = os.path.abspath(os.path.join(my_dir, '../../../../share/osmgeocoder/sql'))
+    sql_files = None
+    try:
+        if resource_exists('osmgeocoder', 'data/sql'):
+            sql_files = list(resource_listdir('osmgeocoder', 'data/sql')) 
+            sql_files.sort()
+            for f in sql_files:
+                print('Executing {}...'.format(f))
+                db.execute(resource_string('osmgeocoder', os.path.join('data/sql', f)))
+    except ModuleNotFoundError:
+        pass
+    
+    if sql_files is None:
+        # if not found, assume we have been started from a source checkout
+        my_dir = os.path.dirname(os.path.abspath(__file__))
+        sql_path = os.path.abspath(os.path.join(my_dir, '../osmgeocoder/data/sql'))
+        sql_files = [f for f in os.listdir(sql_path) if os.path.isfile(os.path.join(sql_path, f))]
+    
+        sql_files.sort()
 
-    # if not found, assume we have been started from a source checkout
-    if not os.path.exists(sql_path):
-        sql_path = os.path.abspath(os.path.join(my_dir, '../sql'))
+        for f in sql_files:
+            print('Executing {}...'.format(f))
+            with open(os.path.join(sql_path, f), 'r') as fp:
+                db.execute(fp.read())
 
-    sql_files = [f for f in os.listdir(sql_path) if os.path.isfile(os.path.join(sql_path, f))]
-    sql_files.sort()
-    for f in sql_files:
-        print('Executing {}...'.format(f))
-        with open(os.path.join(sql_path, f), 'r') as fp:
-            db.execute(fp.read())
-        
 def close_db(db):
     conn = db.connection
     conn.commit()

@@ -1,6 +1,7 @@
 import yaml
 import pystache
 import os
+from pkg_resources import resource_exists, resource_stream
 
 def first(address):
     def _first(content):
@@ -15,21 +16,25 @@ def first(address):
 class AddressFormatter():
 
     def __init__(self, config=None):
-
         # if no opencage data file is specified in the configuration
         # we fall back to the one included with this package
         if config is None:
-            my_dir = os.path.dirname(os.path.abspath(__file__))
 
             # assume we are in a virtualenv first
-            config = os.path.abspath(os.path.join(my_dir, '../../../../share/osmgeocoder/yml/worldwide.yml'))
+            self.model = None
+            try:
+                if resource_exists('osmgeocoder', 'worldwide.yml'):
+                    self.model = yaml.load(resource_stream('osmgeocoder', 'worldwide.yml'))
+            except ModuleNotFoundError:
+                pass
+            
+            if self.model is None:
+                # if not found, assume we have been started from a source checkout
+                my_dir = os.path.dirname(os.path.abspath(__file__))
+                config = os.path.abspath(os.path.join(my_dir, 'data/worldwide.yml'))
 
-            # if not found, assume we have been started from a source checkout
-            if not os.path.exists(config):
-                config = os.path.abspath(os.path.join(my_dir, '../data/worldwide.yml'))
-
-        with open(config, 'r') as fp:
-            self.model = yaml.load(fp)
+                with open(config, 'r') as fp:
+                    self.model = yaml.load(fp)
 
     def format(self, address, country=None):
         search_key = country.upper() if country is not None else 'default'
