@@ -399,7 +399,9 @@ def parse_cmdline():
     parser.add_argument(
         'datafile',
         type=str,
-        help='OpenAddresses.io data file (zipped)'
+        help='OpenAddresses.io data file (zipped)',
+        nargs='?',
+        default=None
     )
 
     return parser.parse_args()
@@ -411,7 +413,8 @@ if __name__ == '__main__':
         db = open_db(args.db_url)
         clear_db(db)
         close_db(db)
-    import_data(args.datafile, args.threads, args.db_url)
+    if args.datafile is not None:
+        import_data(args.datafile, args.threads, args.db_url)
     if args.optimize:
         db = open_db(args.db_url)
         optimize_db(db)
