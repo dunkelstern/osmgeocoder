@@ -14,6 +14,11 @@ from pprint import pprint
 from multiprocessing import Pool, Manager
 from itertools import zip_longest
 
+from tempfile import TemporaryFile
+
+import struct
+from binascii import hexlify
+from pyproj import Proj, transform
 
 def grouper(n, iterable, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -32,9 +37,9 @@ def open_db(url):
 def clear_db(db):
     print('Cleaning up')
     db.execute('''
-        DROP TABLE IF EXISTS oa_city;
-        DROP TABLE IF EXISTS oa_street;
         DROP TABLE IF EXISTS oa_house;
+        DROP TABLE IF EXISTS oa_street;
+        DROP TABLE IF EXISTS oa_city;
         DROP TABLE IF EXISTS oa_license;
     ''')
 
@@ -82,6 +87,7 @@ def prepare_db(db):
     ''')
 
 def finalize_db(db):
+    print('Finalizing import and cleaning up...')
     db.execute('''
         CREATE INDEX oa_street_city_id_idx ON oa_street USING BTREE(city_id);
         CREATE INDEX oa_house_street_id_idx ON oa_house USING BTREE(street_id);
@@ -166,6 +172,8 @@ def import_licenses(license_data, db):
 
 def import_csv(csv_data, license_id, name, db, line):
     print("\033[{};0H\033[KPreparing data for {}...".format(line, name))
+    mercProj = Proj(init='epsg:3857')
+    latlonProj = Proj(init='epsg:4326')
 
     reader = csv.DictReader(io.StringIO(csv_data.decode('UTF-8')))
     cities = {}
@@ -208,10 +216,8 @@ def import_csv(csv_data, license_id, name, db, line):
     del reader
     del csv_data
 
-    house_sql = '''
-        INSERT INTO oa_house (location, housenumber, street_id)
-        VALUES (ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 3857), $3, $4)
-    '''
+    house_file = TemporaryFile(mode='w+')
+
     street_sql = '''
         INSERT INTO oa_street (street, unit, city_id)
         VALUES ($1, $2, $3) RETURNING id
@@ -221,7 +227,7 @@ def import_csv(csv_data, license_id, name, db, line):
         VALUES ($1, $2, $3, $4, $5) RETURNING id
     '''
 
-    db.execute('PREPARE house AS {};'.format(house_sql))
+    # db.execute('PREPARE house AS {};'.format(house_sql))
     db.execute('PREPARE street AS {};'.format(street_sql))
     db.execute('PREPARE city AS {};'.format(city_sql))
 
@@ -243,12 +249,33 @@ def import_csv(csv_data, license_id, name, db, line):
             db.execute('EXECUTE street (%s, %s, %s);', [*street['street'], city_id])
             street_id = db.fetchone()[0]
 
-            aggregate = []
+            # aggregate = []
             for nr, location in street['houses'].items():
-                row_count += 1
-                aggregate.append((location[0], location[1], nr, street_id))
+                # project into 3857 (mercator) from 4326 (WGS84)
+                x, y = transform(latlonProj, mercProj, location[0], location[1])
 
-            execute_batch(db, 'EXECUTE house (%s, %s, %s, %s);' , aggregate)
+                # create wkb representation, theoretically we could use shapely
+                # but we try to not spam newly created objects here
+
+                # ewkb header + srid
+                house_file.write('0101000020110F0000')
+
+                # coordinate
+                house_file.write((hexlify(struct.pack('<d', x)) + hexlify(struct.pack('<d', y))).decode('ascii'))
+
+                # house number field
+                house_file.write('\t')
+                if nr != '':
+                    house_file.write(nr.replace('\\', '\\x5c'))
+                else:
+                    house_file.write(' ')
+
+                # street_id field
+                house_file.write('\t')
+                house_file.write(str(street_id))
+
+                # next record
+                house_file.write('\n')
 
             if time() - timeout > 1.0:
                 eta = (len(cities) / city_count * (time() - start)) - (time() - start)
@@ -258,11 +285,16 @@ def import_csv(csv_data, license_id, name, db, line):
                 row_count = 0
                 timeout = time()
 
+    print("\033[{};0H\033[K -> Running copy from tempfile ({} MB)...".format(line, round(house_file.tell() / 1024 / 1024, 2)))
+    house_file.seek(0)
+    db.copy_from(house_file, 'oa_house', columns=('location', 'housenumber', 'street_id'))
+
     print("\033[{};0H\033[K -> Inserting for {} took {} seconds.".format(line, name, time() - start))
 
     db.execute('DEALLOCATE city;')
     db.execute('DEALLOCATE street;')
-    db.execute('DEALLOCATE house;')
+
+    house_file.close()
 
 
 def import_data(filename, threads, db_url):
@@ -382,3 +414,5 @@ if __name__ == '__main__':
     import_data(args.datafile, args.threads, args.db_url)
     if args.optimize:
         db = open_db(args.db_url)
+        optimize_db(db)
+        close_db(db)
