@@ -20,6 +20,7 @@ from tempfile import TemporaryFile
 import struct
 from binascii import hexlify
 from pyproj import Proj, transform
+import geohash
 
 def grouper(n, iterable, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -93,6 +94,7 @@ def prepare_db(db):
             id SERIAL8 PRIMARY KEY,
             location geometry(POINT, 3857),
             housenumber TEXT,
+            geohash TEXT,
             street_id INT8
         );
     ''')
@@ -125,6 +127,24 @@ def finalize_db(db):
     ''')
 
 def optimize_db(db):
+    print('Clustering houses on geohash...')
+    db.execute('''
+        DROP INDEX IF EXISTS oa_street_city_id_idx;
+        DROP INDEX IF EXISTS oa_house_street_id_idx;
+        CREATE INDEX oa_house_location_geohash_idx ON oa_house (geohash);
+        ANALYZE oa_house;
+        CLUSTER oa_house USING oa_house_location_geohash_idx;
+        ANALYZE oa_house;
+    ''')
+
+    print('Adding fk indices...')
+    db.execute('''
+        CREATE INDEX oa_street_city_id_idx ON oa_street USING BTREE(city_id);
+        CREATE INDEX oa_house_street_id_idx ON oa_house USING BTREE(street_id);
+        ANALYZE oa_street;
+        ANALYZE oa_house;
+    ''')
+
     print('Adding trigram indices...')
     db.execute('''
         CREATE INDEX IF NOT EXISTS oa_house_trgm_idx ON oa_house USING GIN (housenumber gin_trgm_ops);
@@ -137,14 +157,7 @@ def optimize_db(db):
 
     print('Adding spatial indices...')
     db.execute('''
-        CREATE INDEX oa_house_location_geohash_idx ON oa_house (ST_GeoHash(ST_Transform(location, 4326)));
         CREATE INDEX oa_house_location_idx ON oa_house USING GIST(location);
-        ANALYZE oa_house;
-    ''')
-
-    print('Clustering houses on geohash...')
-    db.execute('''
-        CLUSTER oa_house USING oa_house_location_geohash_idx;
         ANALYZE oa_house;
     ''')
 
@@ -217,39 +230,42 @@ def import_csv(csv_stream, size, license_id, name, db, line):
 
     print("\033[{};0H\033[KPreparing data for {}, 0%...".format(line, name))
 
-    # projection setup, we need WGS84 and WebMercator
+    # projection setup, we need WebMercator
     mercProj = Proj(init='epsg:3857')
-    latlonProj = Proj(init='epsg:4326')
 
     # Wrap the byte stream into a TextIOWrapper, we have subclassed it to count
     # the consumed bytes for progress display
     wrapped = CountingTextIOWrapper(csv_stream, encoding='utf8')
-    reader = csv.DictReader(wrapped)
+    reader = csv.reader(wrapped)
+
+    # skip header
+    reader.__next__()
+
     cities = {}
     timeout = time() # status update timeout
     for row in reader:
         # build a street hash
         strt = intern(hashlib.md5(
-            (row['STREET'] +
-            row['UNIT']).encode('utf8')
+            (row[3] +
+            row[4]).encode('utf8')
         ).hexdigest())
 
         # build city hash
         cty = intern(hashlib.md5(
-            (row['CITY'] +
-            row['DISTRICT'] +
-            row['REGION'] +
-            row['POSTCODE']).encode('utf8')
+            (row[5] +
+            row[6] +
+            row[7] +
+            row[8]).encode('utf8')
         ).hexdigest())
 
         # add city if not already in the list
         if cty not in cities:
             cities[cty] = {
                 key_city: (
-                    row['CITY'],
-                    row['DISTRICT'],
-                    row['REGION'],
-                    row['POSTCODE']
+                    row[5],
+                    row[6],
+                    row[7],
+                    row[8]
                 ),
                 key_streets: {}
             }
@@ -258,14 +274,14 @@ def import_csv(csv_stream, size, license_id, name, db, line):
         if strt not in cities[cty][key_streets]:
             cities[cty][key_streets][strt] = {
                 key_street: (
-                    row['STREET'],
-                    row['UNIT'],
+                    row[3],
+                    row[4],
                 ),
                 key_houses: {}
             }
 
         # add house to street
-        cities[cty][key_streets][strt][key_houses][row['NUMBER']] = (row['LON'], row['LAT'])
+        cities[cty][key_streets][strt][key_houses][row[2]] = (row[0], row[1])
 
         # status update
         if time() - timeout > 1.0:
@@ -279,7 +295,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
 
     # create a new temporary file for the house data as we use the postgres COPY command with that
     # for speed reasons
-    house_file = TemporaryFile(mode='w+')
+    house_file = TemporaryFile(mode='w+', buffering=16*1024*1024)
 
     # streets and cities have to be inserted the "normal" way because we need their ids
     street_sql = '''
@@ -321,7 +337,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
             # houses will not be inserted right away but saved to the temp file
             for nr, location in street[key_houses].items():
                 # project into 3857 (mercator) from 4326 (WGS84)
-                x, y = transform(latlonProj, mercProj, location[0], location[1])
+                x, y = mercProj(*location)
 
                 # create wkb representation, theoretically we could use shapely
                 # but we try to not spam newly created objects here
@@ -338,6 +354,10 @@ def import_csv(csv_stream, size, license_id, name, db, line):
                     house_file.write(nr.replace('\\', '\\x5c'))
                 else:
                     house_file.write(' ')
+
+                # geohash
+                house_file.write('\t')
+                house_file.write(geohash.encode(float(location[0]), float(location[1])))
 
                 # street_id field
                 house_file.write('\t')
@@ -360,7 +380,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     # now COPY the contents of the temp file into the DB
     print("\033[{};0H\033[K -> Running copy from tempfile ({} MB)...".format(line, round(house_file.tell() / 1024 / 1024, 2)))
     house_file.seek(0)
-    db.copy_from(house_file, 'oa_house', columns=('location', 'housenumber', 'street_id'))
+    db.copy_from(house_file, 'oa_house', columns=('location', 'housenumber', 'geohash', 'street_id'))
 
     # cleanup
     print("\033[{};0H\033[K -> Inserting for {} took {} seconds.".format(line, name, time() - start))

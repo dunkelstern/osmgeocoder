@@ -57,7 +57,8 @@ setup(
             'Shapely >= 1.6',
             'requests >= 2.18',
             'PyYAML >= 3.12',
-            'pystache >= 0.5'
+            'pystache >= 0.5',
+            'python-geohash >= 0.8.5'
         ],
         dependency_links=[
         ]
