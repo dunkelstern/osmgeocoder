@@ -13,6 +13,7 @@ import os
 from pprint import pprint
 from multiprocessing import Pool, Manager
 from itertools import zip_longest
+from sys import intern
 
 from tempfile import TemporaryFile
 
@@ -25,6 +26,24 @@ def grouper(n, iterable, fillvalue=None):
     # grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx
     args = [iter(iterable)] * n
     return zip_longest(fillvalue=fillvalue, *args)
+
+class CountingTextIOWrapper(io.TextIOWrapper):
+    """Wrapper for the TextIOWrapper to be able to count already consumed bytes"""
+
+    def __init__(self, stream, encoding=None):
+        super().__init__(stream, encoding=encoding)
+        self.position = 0
+
+    def read(self, *args, **kwargs):
+        result = super().read(*args, **kwargs)
+        self.position += len(result)
+        return result
+
+    def readline(self, *args, **kwargs):
+        result = super().readline(*args, **kwargs)
+        self.position += len(result)
+        return result
+
 #
 # DB-Utility functions
 #
@@ -44,7 +63,7 @@ def clear_db(db):
     ''')
 
 def prepare_db(db):
-    print('Creating tables')
+    print('Creating tables...')
     db.execute('''
         CREATE TABLE IF NOT EXISTS oa_license (
             id SERIAL PRIMARY KEY,
@@ -76,10 +95,16 @@ def prepare_db(db):
             housenumber TEXT,
             street_id INT8
         );
+    ''')
 
+    print('Dropping indices and constraints for speed improvement...')
+    db.execute('''
         ALTER TABLE oa_city DROP CONSTRAINT IF EXISTS oa_city_license_id_fk;
         ALTER TABLE oa_street DROP CONSTRAINT IF EXISTS oa_street_city_id_fk;
         ALTER TABLE oa_house DROP CONSTRAINT IF EXISTS oa_house_street_id_fk;
+        DROP INDEX IF EXISTS oa_street_trgm_idx;
+        DROP INDEX IF EXISTS oa_city_trgm_idx;
+        DROP INDEX IF EXISTS oa_house_trgm_idx;
         DROP INDEX IF EXISTS oa_street_city_id_idx;
         DROP INDEX IF EXISTS oa_house_street_id_idx;
         DROP INDEX IF EXISTS oa_data_location_geohash_idx;
@@ -100,15 +125,28 @@ def finalize_db(db):
     ''')
 
 def optimize_db(db):
-    print('Adding indexes...')
+    print('Adding trigram indices...')
+    db.execute('''
+        CREATE INDEX IF NOT EXISTS oa_house_trgm_idx ON oa_house USING GIN (housenumber gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS oa_city_trgm_idx ON oa_city USING GIN (city gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS oa_street_trgm_idx ON oa_street USING GIN (street gin_trgm_ops);
+        ANALYZE oa_house;
+        ANALYZE oa_street;
+        ANALYZE oa_city;
+    ''')
+
+    print('Adding spatial indices...')
     db.execute('''
         CREATE INDEX oa_house_location_geohash_idx ON oa_house (ST_GeoHash(ST_Transform(location, 4326)));
         CREATE INDEX oa_house_location_idx ON oa_house USING GIST(location);
         ANALYZE oa_house;
     ''')
 
-    print('Clustering on geohash...')
-    db.execute('CLUSTER oa_house USING oa_house_location_geohash_idx;')
+    print('Clustering houses on geohash...')
+    db.execute('''
+        CLUSTER oa_house USING oa_house_location_geohash_idx;
+        ANALYZE oa_house;
+    ''')
 
 def close_db(db):
     conn = db.connection
@@ -170,54 +208,80 @@ def import_licenses(license_data, db):
 
     return licenses
 
-def import_csv(csv_data, license_id, name, db, line):
-    print("\033[{};0H\033[KPreparing data for {}...".format(line, name))
+def import_csv(csv_stream, size, license_id, name, db, line):
+    # space optimization, reference these strings instead of copying them
+    key_city = intern('city')
+    key_streets = intern('streets')
+    key_street = intern('street')
+    key_houses = intern('houses')
+
+    print("\033[{};0H\033[KPreparing data for {}, 0%...".format(line, name))
+
+    # projection setup, we need WGS84 and WebMercator
     mercProj = Proj(init='epsg:3857')
     latlonProj = Proj(init='epsg:4326')
 
-    reader = csv.DictReader(io.StringIO(csv_data.decode('UTF-8')))
+    # Wrap the byte stream into a TextIOWrapper, we have subclassed it to count
+    # the consumed bytes for progress display
+    wrapped = CountingTextIOWrapper(csv_stream, encoding='utf8')
+    reader = csv.DictReader(wrapped)
     cities = {}
+    timeout = time() # status update timeout
     for row in reader:
         # build a street hash
-        strt = hashlib.md5(
+        strt = intern(hashlib.md5(
             (row['STREET'] +
             row['UNIT']).encode('utf8')
-        ).hexdigest()
+        ).hexdigest())
 
-        cty = hashlib.md5(
+        # build city hash
+        cty = intern(hashlib.md5(
             (row['CITY'] +
             row['DISTRICT'] +
             row['REGION'] +
             row['POSTCODE']).encode('utf8')
-        ).hexdigest()
+        ).hexdigest())
 
+        # add city if not already in the list
         if cty not in cities:
             cities[cty] = {
-                'city': (
+                key_city: (
                     row['CITY'],
                     row['DISTRICT'],
                     row['REGION'],
                     row['POSTCODE']
                 ),
-                'streets': {}
+                key_streets: {}
             }
 
-        if strt not in cities[cty]['streets']:
-            cities[cty]['streets'][strt] = {
-                'street': (
+        # add street if not already in the list
+        if strt not in cities[cty][key_streets]:
+            cities[cty][key_streets][strt] = {
+                key_street: (
                     row['STREET'],
                     row['UNIT'],
                 ),
-                'houses': {}
+                key_houses: {}
             }
 
-        cities[cty]['streets'][strt]['houses'][row['NUMBER']] = (row['LON'], row['LAT'])
+        # add house to street
+        cities[cty][key_streets][strt][key_houses][row['NUMBER']] = (row['LON'], row['LAT'])
 
+        # status update
+        if time() - timeout > 1.0:
+            print("\033[{};0H\033[KPreparing data for {}, {} %...".format(line, name, round(wrapped.position / size * 100.0,2)))
+            timeout = time()
+
+    # force cleaning up to avoid memory bloat
     del reader
-    del csv_data
+    del wrapped
+    del csv_stream
 
+    # create a new temporary file for the house data as we use the postgres COPY command with that
+    # for speed reasons
     house_file = TemporaryFile(mode='w+')
 
+    # streets and cities have to be inserted the "normal" way because we need their ids
     street_sql = '''
         INSERT INTO oa_street (street, unit, city_id)
         VALUES ($1, $2, $3) RETURNING id
@@ -227,10 +291,11 @@ def import_csv(csv_data, license_id, name, db, line):
         VALUES ($1, $2, $3, $4, $5) RETURNING id
     '''
 
-    # db.execute('PREPARE house AS {};'.format(house_sql))
+    # prepare statements
     db.execute('PREPARE street AS {};'.format(street_sql))
     db.execute('PREPARE city AS {};'.format(city_sql))
 
+    # start insertion cycle
     print("\033[{};0H\033[KInserting data for {}...".format(line, name))
 
     city_count = 0
@@ -240,17 +305,21 @@ def import_csv(csv_data, license_id, name, db, line):
     for key, item in cities.items():
         city_count += 1
 
+        # insert city and fetch the id
         row_count += 1
-        db.execute('EXECUTE city (%s, %s, %s, %s, %s);', [*item['city'], license_id])
+        db.execute('EXECUTE city (%s, %s, %s, %s, %s);', [*item[key_city], license_id])
         city_id = db.fetchone()[0]
 
-        for street in item['streets'].values():
+        # insert all streets
+        for street in item[key_streets].values():
             row_count += 1
-            db.execute('EXECUTE street (%s, %s, %s);', [*street['street'], city_id])
+
+            # we need the id
+            db.execute('EXECUTE street (%s, %s, %s);', [*street[key_street], city_id])
             street_id = db.fetchone()[0]
 
-            # aggregate = []
-            for nr, location in street['houses'].items():
+            # houses will not be inserted right away but saved to the temp file
+            for nr, location in street[key_houses].items():
                 # project into 3857 (mercator) from 4326 (WGS84)
                 x, y = transform(latlonProj, mercProj, location[0], location[1])
 
@@ -277,6 +346,7 @@ def import_csv(csv_data, license_id, name, db, line):
                 # next record
                 house_file.write('\n')
 
+            # status update
             if time() - timeout > 1.0:
                 eta = (len(cities) / city_count * (time() - start)) - (time() - start)
                 print("\033[{};0H\033[K - {:40}, {:>6}%, {:>6} rows/second, eta: {:>5} seconds".format(
@@ -285,22 +355,26 @@ def import_csv(csv_data, license_id, name, db, line):
                 row_count = 0
                 timeout = time()
 
+    del cities
+
+    # now COPY the contents of the temp file into the DB
     print("\033[{};0H\033[K -> Running copy from tempfile ({} MB)...".format(line, round(house_file.tell() / 1024 / 1024, 2)))
     house_file.seek(0)
     db.copy_from(house_file, 'oa_house', columns=('location', 'housenumber', 'street_id'))
 
+    # cleanup
     print("\033[{};0H\033[K -> Inserting for {} took {} seconds.".format(line, name, time() - start))
-
     db.execute('DEALLOCATE city;')
     db.execute('DEALLOCATE street;')
-
     house_file.close()
 
 
 def import_data(filename, threads, db_url):
+    # prepare database (drop indices and constraints for speed)
     db = open_db(args.db_url)
     prepare_db(db)
 
+    # insert license data
     z = zipfile.ZipFile(filename)
     files = [f for f in z.namelist() if not f.startswith('summary/') and f.endswith('.csv')]
     files.sort()
@@ -311,6 +385,7 @@ def import_data(filename, threads, db_url):
 
     close_db(db)
 
+    # prepare the work queue
     manager = Manager()
     status_object = manager.dict()
 
@@ -325,7 +400,7 @@ def import_data(filename, threads, db_url):
     print("\033[2J")
     status_object['__dummy__'] = 0
 
-    # wait for all import threads to exit
+    # run and wait for all import threads to exit
     if threads == 1:
         for f in import_queue:
             worker(*f)
@@ -333,14 +408,18 @@ def import_data(filename, threads, db_url):
         with Pool(threads, maxtasksperchild=1) as p:
             p.starmap(worker, import_queue, 1)
 
-    print("\033[2J")
+    # clear screen, finalize db (re-create constraints and associated indices)
+    print("\033[2J\033[1;0H\033[K")
     db = open_db(args.db_url)
     finalize_db(db)
     close_db(db)
 
 
 def worker(filename, name, license_id, db_url, status):
+    # wait a random time to make the status line selection robust
     sleep(random.random() * 3.0 + 0.5)
+
+    # select which line we want to use to send our status output to
     seen_lines = []
     for value in status.values():
         if value >= 0 and value not in seen_lines:
@@ -353,12 +432,19 @@ def worker(filename, name, license_id, db_url, status):
     if status[name] == -1:
         status[name] = max(seen_lines) + 1
 
+    # open all connections and inputs
     z = zipfile.ZipFile(filename)
     db = open_db(db_url)
-    import_csv(z.read(name), license_id, name, db, status[name])
+
+    # start the import
+    zip_info = z.getinfo(name)
+    import_csv(z.open(name, 'r'), zip_info.file_size, license_id, name, db, status[name])
+
+    # clean up afterwards
     close_db(db)
     z.close()
 
+    # free the status line
     status[name] = -1
 
 
