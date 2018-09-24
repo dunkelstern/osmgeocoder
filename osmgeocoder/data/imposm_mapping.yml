@@ -19,9 +19,6 @@ tables:
     - key: addr:housenumber
       name: house_number
       type: string
-    filters:
-      require:
-        "addr:street": [__any__]
     mapping:
       building:
       - __any__
