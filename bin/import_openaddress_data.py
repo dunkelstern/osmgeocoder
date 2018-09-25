@@ -127,7 +127,7 @@ def prepare_db(db):
                 h."source"
             FROM house h
             JOIN street s ON h.street_id = s.id
-            JOIN city c ON s.city_id = c.id;
+            JOIN city c ON s.city_id = c.id
         );
     ''')
 
@@ -195,7 +195,7 @@ def cluster(i, url):
         CLUSTER house_{i} USING house_{i}_location_geohash_idx;
         CREATE INDEX house_{i}_trgm_idx ON house_{i} USING GIN (housenumber gin_trgm_ops);
         CREATE INDEX house_{i}_location_idx ON house_{i} USING GIST(location);
-        VACUUM ANALYZE house_{i};
+        ANALYZE house_{i};
     ''')
     close_db(db)
 
@@ -241,6 +241,12 @@ def save_license(record, db):
 
 def import_licenses(license_data, db):
     licenses = {}
+    licenses['osm'] = save_license({
+        'file': 'osm',
+        'license': 'Open Data Commons Open Database License (ODbL)',
+        'attribution': '© OpenStreetMap contributors',
+        'website': 'https://www.openstreetmap.org/copyright'
+    }, db)
 
     lines = license_data.split(b"\n")[2:] # skip header
 
