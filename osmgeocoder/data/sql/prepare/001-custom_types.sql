@@ -30,3 +30,48 @@ BEGIN
     END IF;
 END
 $$;
+
+CREATE OR REPLACE FUNCTION get_record_ids(city_in TEXT, postcode_in TEXT, street_in TEXT, housenumber_in TEXT) RETURNS TABLE (
+	city_id int8,
+	street_id int8,
+	house_id int8
+) AS
+$$
+DECLARE
+	cty int8;
+	strt int8;
+	hs int8;
+BEGIN
+    SELECT
+        c.id
+    INTO cty
+    FROM city c
+    WHERE
+        c.city = city_in
+        AND c.postcode = postcode_in
+    LIMIT 1;
+
+	SELECT
+	    s.id
+	INTO strt
+	FROM street s
+	WHERE
+	    s.city_id = cty
+	    AND s.street = street_in
+	LIMIT 1;
+
+	SELECT
+		h.id
+	INTO hs
+	FROM house h
+	WHERE
+		h.street_id = strt
+		AND h.housenumber = housenumber_in
+	LIMIT 1;
+
+	city_id := cty;
+	street_id := strt;
+	house_id := hs;
+	RETURN NEXT;
+END
+$$ LANGUAGE 'plpgsql';
