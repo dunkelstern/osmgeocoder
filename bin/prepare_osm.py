@@ -110,12 +110,16 @@ def cluster(i, url):
         DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
         DROP INDEX IF EXISTS house_{i}_trgm_idx;
         DROP INDEX IF EXISTS house_{i}_location_idx;
+        DROP INDEX IF EXISTS house_{i}_id_idx;
+        DROP INDEX IF EXISTS house_{i}_housenumber_idx;
 
         CREATE INDEX house_{i}_location_geohash_idx ON house_{i} USING BTREE(geohash);
         CLUSTER house_{i} USING house_{i}_location_geohash_idx;
         CREATE INDEX house_{i}_trgm_idx ON house_{i} USING GIN (housenumber gin_trgm_ops);
         CREATE INDEX house_{i}_location_idx ON house_{i} USING GIST(location);
-        CREATE INDEX house_{i}_street_id_idx USING BTREE(street_id);
+        CREATE INDEX house_{i}_housenumber_idx ON house_{i} USING BTREE(housenumber);
+        CREATE INDEX house_{i}_id_idx ON house_{i} USING BTREE(id);
+        CREATE INDEX house_{i}_street_id_idx ON house_{i} USING BTREE(street_id);
         ANALYZE house_{i};
     ''')
     close_db(db)

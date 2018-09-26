@@ -135,7 +135,6 @@ def prepare_db(db):
     min_val = -20026376.39
     max_val = 20026376.39
     val_inc = (max_val - min_val) / PARTITION_SIZE
-    print(val_inc)
     for i in range(0, PARTITION_SIZE):
         print(f' - {i}: {min_val + val_inc * i} TO {min_val + val_inc * (i + 1)}')
         db.execute(f'''
@@ -166,6 +165,7 @@ def finalize_db(db, optimize=False):
             ''')
 
         db.execute('''
+            DROP INDEX IF EXISTS street_city_id_idx;
             CREATE INDEX street_city_id_idx ON street USING BTREE(city_id);
             ANALYZE city;
             ANALYZE street;
@@ -175,6 +175,7 @@ def finalize_db(db, optimize=False):
     print('Creating fk indices...')
     for i in range(0, PARTITION_SIZE):
         db.execute(f'''
+            ALTER TABLE house_{i} DROP CONSTRAINT IF EXISTS house_{i}_street_id_fk;
             ALTER TABLE house_{i} ADD CONSTRAINT house_{i}_street_id_fk FOREIGN KEY (street_id) REFERENCES street (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
         ''')
     db.execute('''
@@ -190,11 +191,15 @@ def cluster(i, url):
         DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
         DROP INDEX IF EXISTS house_{i}_trgm_idx;
         DROP INDEX IF EXISTS house_{i}_location_idx;
+        DROP INDEX IF EXISTS house_{i}_id_idx;
+        DROP INDEX IF EXISTS house_{i}_housenumber_idx;
 
         CREATE INDEX house_{i}_location_geohash_idx ON house_{i} USING BTREE(geohash);
         CLUSTER house_{i} USING house_{i}_location_geohash_idx;
         CREATE INDEX house_{i}_trgm_idx ON house_{i} USING GIN (housenumber gin_trgm_ops);
         CREATE INDEX house_{i}_location_idx ON house_{i} USING GIST(location);
+        CREATE INDEX house_{i}_housenumber_idx ON house_{i} USING BTREE(housenumber);
+        CREATE INDEX house_{i}_id_idx ON house_{i} USING BTREE(id);
         ANALYZE house_{i};
     ''')
     close_db(db)
@@ -211,6 +216,8 @@ def optimize_db(db, threads, url):
     db.execute('''
         CREATE INDEX IF NOT EXISTS city_trgm_idx ON city USING GIN (city gin_trgm_ops);
         CREATE INDEX IF NOT EXISTS street_trgm_idx ON street USING GIN (street gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS city_postcode_idx ON city USING BTREE(postcode);
+        CREATE INDEX IF NOT EXISTS city_city_idx ON city USING BTREE(city);
         ANALYZE street;
         ANALYZE city;
     ''')
