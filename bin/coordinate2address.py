@@ -40,9 +40,5 @@ with open(args.config[0], "r") as fp:
 
 geocoder = Geocoder(**config)
 address = next(geocoder.reverse(args.lat, args.lon))
-
-print('Resolved {}, {} to "{}"'.format(
-    args.lat,
-    args.lon,
-    ', '.join(address.split("\n")).strip()
-))
+address_line = ', '.join(address.split("\n")).strip()
+print(f'Resolved {args.lat}, {args.lon} to "{address_line}"')

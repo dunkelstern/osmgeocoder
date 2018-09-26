@@ -57,7 +57,7 @@ if args.country is not None:
 
 results = geocoder.forward(args.address, **kwargs)
 
-print('Resolved "{}" to'.format(args.address))
+print(f'Resolved "{args.address}" to')
 for addr, lat, lon in results:
     addr = ', '.join(addr.split("\n")).strip()
-    print(" - {} -> {}, {}".format(addr, lat, lon))
+    print(f" - {addr} -> {lat}, {lon}")

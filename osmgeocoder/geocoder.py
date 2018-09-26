@@ -19,7 +19,7 @@ class Geocoder():
     def _init_db(self, db_config):
         connstring = []
         for key, value in db_config.items():
-            connstring.append("{}={}".format(key, value))
+            connstring.append(f"{key}={value}")
         connection = psycopg2.connect(" ".join(connstring))
 
         return connection
@@ -57,7 +57,3 @@ class Geocoder():
 
         for result in cursor:
             yield result['word']
-
-
-
- 

@@ -270,7 +270,7 @@ def import_licenses(license_data, db):
             #     continue
             fname = record['file'] + '.csv'
             licenses[fname] = save_license(record, db)
-            print('Saved license for {}: {}'.format(fname, licenses[fname]))
+            print(f'Saved license for {fname}: {licenses[fname]}')
 
             record = {
                 'file': None,
@@ -290,7 +290,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     key_street = intern('street')
     key_houses = intern('houses')
 
-    print("\033[{};0H\033[KPreparing data for {}, 0%...".format(line, name))
+    print(f"\033[{line};0H\033[KPreparing data for {name}, 0%...")
 
     # projection setup, we need WebMercator
     mercProj = Proj(init='epsg:3857')
@@ -347,7 +347,8 @@ def import_csv(csv_stream, size, license_id, name, db, line):
 
         # status update
         if time() - timeout > 1.0:
-            print("\033[{};0H\033[KPreparing data for {}, {} %...".format(line, name, round(wrapped.position / size * 100.0,2)))
+            percentage = round(wrapped.position / size * 100.0, 2)
+            print("\033[{line};0H\033[KPreparing data for {name}, {percentage} %...")
             timeout = time()
 
     # force cleaning up to avoid memory bloat
@@ -370,11 +371,11 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     '''
 
     # prepare statements
-    db.execute('PREPARE street AS {};'.format(street_sql))
-    db.execute('PREPARE city AS {};'.format(city_sql))
+    db.execute(f'PREPARE street AS {street_sql};')
+    db.execute(f'PREPARE city AS {city_sql};')
 
     # start insertion cycle
-    print("\033[{};0H\033[KInserting data for {}...".format(line, name))
+    print(f"\033[{line};0H\033[KInserting data for {name}...")
 
     city_count = 0
     row_count = 0
@@ -434,22 +435,21 @@ def import_csv(csv_stream, size, license_id, name, db, line):
 
             # status update
             if time() - timeout > 1.0:
-                eta = (len(cities) / city_count * (time() - start)) - (time() - start)
-                print("\033[{};0H\033[K - {:40}, {:>6}%, {:>6} rows/second, eta: {:>5} seconds".format(
-                    line, name, round((city_count / len(cities) * 100), 2), row_count, int(eta)
-                ))
+                eta = round((len(cities) / city_count * (time() - start)) - (time() - start))
+                percentage = round((city_count / len(cities) * 100), 2)
+                print(f"\033[{line};0H\033[K - {name:40}, {percentage:>6}%, {row_count:>6} rows/second, eta: {eta:>5} seconds")
                 row_count = 0
                 timeout = time()
 
     del cities
 
     # now COPY the contents of the temp file into the DB
-    print("\033[{};0H\033[K -> Running copy from tempfile ({} MB)...".format(line, round(house_file.tell() / 1024 / 1024, 2)))
+    print(f"\033[{line};0H\033[K -> Running copy from tempfile ({round(house_file.tell() / 1024 / 1024, 2)} MB)...")
     house_file.seek(0)
     db.copy_from(house_file, 'house', columns=('location', 'housenumber', 'geohash', 'source', 'street_id'))
 
     # cleanup
-    print("\033[{};0H\033[K -> Inserting for {} took {} seconds.".format(line, name, time() - start))
+    print(f"\033[{line};0H\033[K -> Inserting for {name} took {round(time() - start)} seconds.")
     db.execute('DEALLOCATE city;')
     db.execute('DEALLOCATE street;')
     house_file.close()
@@ -479,7 +479,7 @@ def import_data(filename, threads, db_url, optimize, fast):
     import_queue = []
     for f in files:
         if f not in licenses.keys():
-            print('Skipping {}, no license data'.format(f))
+            print(f'Skipping {f}, no license data')
             continue
         status_object[f] = -1
         import_queue.append((filename, f, licenses[f], db_url, status_object))

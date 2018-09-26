@@ -39,7 +39,7 @@ def load_sql(db, path):
             sql_files = list(resource_listdir('osmgeocoder', path))
             sql_files.sort()
             for f in sql_files:
-                print('Executing {}...'.format(f))
+                print(f'Executing {f}...')
                 db.execute(resource_string('osmgeocoder', os.path.join(path, f)))
     except ModuleNotFoundError:
         # if not found, assume we have been started from a source checkout
@@ -49,7 +49,7 @@ def load_sql(db, path):
         sql_files.sort()
 
         for f in sql_files:
-            print('Executing {}...'.format(f))
+            print(f'Executing {f}...')
             with open(f, 'r') as fp:
                 db.execute(fp.read())
 
@@ -136,8 +136,7 @@ def convert_osm(db_url, threads):
     db = open_db(db_url)
     print('Dropping indexes...')
     for i in range(0, PARTITION_SIZE):
-        db.execute("""
-            DROP INDEX IF EXISTS house_{i}_street_id_idx;
+        db.execute(f"""
             DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
             DROP INDEX IF EXISTS house_{i}_trgm_idx;
             DROP INDEX IF EXISTS house_{i}_location_idx;
