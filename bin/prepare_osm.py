@@ -18,6 +18,8 @@ import geohash
 import psycopg2
 from psycopg2.extras import DictCursor
 
+PARTITION_SIZE = 360
+
 #
 # DB-Utility functions
 #
@@ -100,10 +102,47 @@ def imposm_import(db_url, data_file):
     if temp is not None:
         temp.close()
 
+def cluster(i, url):
+    print(f'Running optimize on shard {i}...')
+    db = open_db(url)
+    db.execute(f'''
+        DROP INDEX IF EXISTS house_{i}_street_id_idx;
+        DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
+        DROP INDEX IF EXISTS house_{i}_trgm_idx;
+        DROP INDEX IF EXISTS house_{i}_location_idx;
+
+        CREATE INDEX house_{i}_location_geohash_idx ON house_{i} USING BTREE(geohash);
+        CLUSTER house_{i} USING house_{i}_location_geohash_idx;
+        CREATE INDEX house_{i}_trgm_idx ON house_{i} USING GIN (housenumber gin_trgm_ops);
+        CREATE INDEX house_{i}_location_idx ON house_{i} USING GIST(location);
+        CREATE INDEX house_{i}_street_id_idx USING BTREE(street_id);
+        ANALYZE house_{i};
+    ''')
+    close_db(db)
+
+
+def _optimize_db(db_url, threads):
+    work_queue = []
+    for i in range(0, PARTITION_SIZE):
+        work_queue.append((i, db_url))
+
+    with Pool(threads, maxtasksperchild=1) as p:
+        p.starmap(cluster, work_queue, 1)
+
+
 def convert_osm(db_url, threads):
     print('Converting OSM data...')
 
     db = open_db(db_url)
+    print('Dropping indexes...')
+    for i in range(0, PARTITION_SIZE):
+        db.execute("""
+            DROP INDEX IF EXISTS house_{i}_street_id_idx;
+            DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
+            DROP INDEX IF EXISTS house_{i}_trgm_idx;
+            DROP INDEX IF EXISTS house_{i}_location_idx;
+        """)
+
     db.execute("""
         CREATE OR REPLACE FUNCTION get_road_name(building osm_buildings) RETURNS text AS
         $$
@@ -169,7 +208,7 @@ def convert_osm(db_url, threads):
     # approximate row count
     db.execute('SELECT last_value AS ct FROM osm_buildings_id_seq;')
     rowcount = db.fetchone()['ct']
-    part_size = int(math.ceil(rowcount / (threads * 10000)))
+    part_size = int(math.ceil(rowcount / (threads * 100)))
 
     import_queue = []
     for id_start in range(0, rowcount - part_size, part_size):
@@ -189,6 +228,8 @@ def convert_osm(db_url, threads):
 
     print("\033[2J\033[1;0H\033[K")
     close_db(db)
+
+    _optimize_db(db_url, threads)
 
 def worker(id_start, id_end, postcode_map, db_url, status):
     # wait a random time to make the status line selection robust
