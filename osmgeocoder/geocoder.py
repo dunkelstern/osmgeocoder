@@ -5,7 +5,7 @@ from shapely.wkb import loads
 from pyproj import Proj, transform
 
 from .format import AddressFormatter
-from .reverse import fetch_address
+from .reverse import fetch_address, prepare_statements
 from .forward import fetch_coordinate
 
 
@@ -15,6 +15,9 @@ class Geocoder():
         self.postal_service = postal
         self.db = self._init_db(db)
         self.formatter = AddressFormatter(config=address_formatter_config)
+
+        # prepare statements for each of the 360 shard tables
+        prepare_statements(self, 360)
 
     def _init_db(self, db_config):
         connstring = []
