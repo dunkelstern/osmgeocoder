@@ -186,7 +186,7 @@ def cluster(i, url):
     print(f'Running optimize on shard {i}...')
     db = open_db(url)
     db.execute(f'''
-        DROP INDEX IF EXISTS house_{i}street_id_idx;
+        DROP INDEX IF EXISTS house_{i}_street_id_idx;
         DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
         DROP INDEX IF EXISTS house_{i}_trgm_idx;
         DROP INDEX IF EXISTS house_{i}_location_idx;
