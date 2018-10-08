@@ -355,7 +355,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
         # status update
         if time() - timeout > 1.0:
             percentage = round(wrapped.position / size * 100.0, 2)
-            print("\033[{line};0H\033[KPreparing data for {name}, {percentage} %...")
+            print(f"\033[{line};0H\033[KPreparing data for {name}, {percentage} %...")
             timeout = time()
 
     # force cleaning up to avoid memory bloat
