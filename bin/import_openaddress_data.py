@@ -313,6 +313,8 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     cities = {}
     timeout = time() # status update timeout
     for row in reader:
+        row = [s.title() for s in row]
+
         # build a street hash
         strt = intern(hashlib.md5(
             (row[3] +
@@ -334,7 +336,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
                     row[5],
                     row[6],
                     row[7],
-                    row[8]
+                    row[8].upper()
                 ),
                 key_streets: {}
             }
