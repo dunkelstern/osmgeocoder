@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 from time import time, sleep
+from urllib.parse import urlparse
 from multiprocessing import Pool, Manager
 from pkg_resources import resource_exists, resource_listdir, resource_string
 
@@ -138,13 +139,13 @@ def convert_osm(db_url, threads):
     print('Converting OSM data...')
 
     db = open_db(db_url)
-    print('Dropping indexes...')
-    for i in range(0, PARTITION_SIZE):
-        db.execute(f"""
-            DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
-            DROP INDEX IF EXISTS house_{i}_trgm_idx;
-            DROP INDEX IF EXISTS house_{i}_location_idx;
-        """)
+    # print('Dropping indexes...')
+    # for i in range(0, PARTITION_SIZE):
+    #     db.execute(f"""
+    #         DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
+    #         DROP INDEX IF EXISTS house_{i}_trgm_idx;
+    #         DROP INDEX IF EXISTS house_{i}_location_idx;
+    #     """)
 
     db.execute("""
         CREATE OR REPLACE FUNCTION get_road_name(building osm_buildings) RETURNS text AS
@@ -169,7 +170,7 @@ def convert_osm(db_url, threads):
             array_agg(pc.id) as id,
             a.name
         FROM osm_postal_code pc
-        JOIN osm_admin a ON (a.admin_level = 2 AND ST_Contains(a.geometry, ST_Centroid(pc.geometry)))
+        JOIN osm_admin a ON (a.admin_level = 2 AND ST_Contains(a.geometry, pc.geometry))
         WHERE NULLIF(a.name, '') IS NOT NULL
         GROUP BY a.id
     """)
@@ -199,7 +200,7 @@ def convert_osm(db_url, threads):
         """, [ids])
 
         for row in src:
-            postcode_map[row['id']] = (row['postcode'], sys.intern(row['city']), sys.intern(country))
+            postcode_map[row['id']] = (row['postcode'].upper(), sys.intern(row['city'].title()), sys.intern(country.title()))
         close_db(src)
 
     del country_postcode_map
@@ -208,15 +209,10 @@ def convert_osm(db_url, threads):
     manager = Manager()
     status_object = manager.dict()
 
-    # approximate row count
-    db.execute('SELECT last_value AS ct FROM osm_buildings_id_seq;')
-    rowcount = db.fetchone()['ct']
-    part_size = int(math.ceil(rowcount / (threads * 100)))
-
     import_queue = []
-    for id_start in range(0, rowcount - part_size, part_size):
-        status_object[str(id_start)] = -1
-        import_queue.append((id_start, id_start + part_size, postcode_map, db_url, status_object))
+    for id in postcode_map.keys():
+        status_object[str(id)] = -1
+        import_queue.append((id, postcode_map[id], db_url, status_object))
 
     print("\033[2J")
     status_object['__dummy__'] = 0
@@ -234,7 +230,8 @@ def convert_osm(db_url, threads):
 
     _optimize_db(db_url, threads)
 
-def worker(id_start, id_end, postcode_map, db_url, status):
+
+def worker(id, postcode_map, db_url, status):
     # wait a random time to make the status line selection robust
     sleep(random.random() * 3.0 + 0.5)
 
@@ -246,16 +243,20 @@ def worker(id_start, id_end, postcode_map, db_url, status):
     seen_lines.sort()
     for idx, l in enumerate(seen_lines):
         if idx != l:
-            status[str(id_start)] = idx
+            status[str(id)] = idx
             break
-    if status[str(id_start)] == -1:
-        status[str(id_start)] = max(seen_lines) + 1
+    if status[str(id)] == -1:
+        status[str(id)] = max(seen_lines) + 1
 
-    _convert(id_start, id_end, postcode_map, db_url, status[str(id_start)])
+    try:
+        _convert(id, postcode_map, db_url, status[str(id)])
+    except Exception as e:
+        print(f'\033[{status[str(id)]};0H\033[KException: {str(e)}')
+        sleep(10)
+    status[str(id)] = -1
 
-    status[str(id_start)] = -1
 
-def _convert(id_start, id_end, postcode_map, db_url, line):
+def _convert(id, postcode_map, db_url, line):
     db = open_db(db_url)
     src = open_db(db_url, cursor_name='converter')
     src.itersize = 100
@@ -265,7 +266,6 @@ def _convert(id_start, id_end, postcode_map, db_url, line):
             b.osm_id,
             b.name,
             b."type",
-            pc.id as pc_id,
             COALESCE(
                 NULLIF(b.road, ''::text),
                 get_road_name(b.*)
@@ -274,55 +274,58 @@ def _convert(id_start, id_end, postcode_map, db_url, line):
             ST_Centroid(b.geometry) as location,
             ST_X(ST_Transform(ST_Centroid(b.geometry), 4326)) as lat,
             ST_Y(ST_Transform(ST_Centroid(b.geometry), 4326)) as lon
-        FROM osm_buildings b
-        LEFT JOIN osm_postal_code pc -- join postal codes which have own geometry
-            ON ST_Contains(pc.geometry, ST_Centroid(b.geometry))
+        FROM osm_postal_code pc
+        LEFT JOIN osm_buildings b
+            ON ST_Intersects(pc.geometry, b.geometry)
         WHERE
-            b.id >= %s
-            AND b.id < %s
-            AND pc.id IS NOT NULL
+            pc.id = %s
             AND b."type" <> 'garage'::text
             AND b."type" <> 'garages'::text
             AND b."type" <> 'shed'::text
             AND b."type" <> 'roof'::text
             AND b."type" <> 'tank'::text;
-    """, (id_start, id_end))
+    """, (id, ))
 
     rownum = 0
     oldnum = 0
     skipped = 0
     start = time()
     timeout = time()
+
+    postcode, city, country = postcode_map
+
+    db.execute("SELECT * FROM get_city_id(%s::text, %s::text);", (city, postcode))
+    result = db.fetchone()
+
+    city_id = result['city_id']
+    if city_id is None:
+        # create city
+        db.execute('INSERT INTO city (city, postcode, license_id) VALUES (%s, %s, 1) RETURNING id;', (city, postcode))
+        city_id = db.fetchone()['id']
+
+
     for row in src:
         rownum += 1
         if timeout < time() - 1.0:
             rows_per_sec = (rownum - oldnum) / (time() - timeout)
             timeout = time()
-            print(f'\033[{line};0H\033[K{id_start}: {rownum} rows processed, {skipped} skipped, {round(rows_per_sec)} rows/s, time elapsed: {round(time() - start)} s')
+            print(f'\033[{line};0H\033[K{postcode} {city}, {country}: {rownum} rows processed, {skipped} skipped, {round(rows_per_sec)} rows/s, time elapsed: {round(time() - start)} s')
             oldnum = rownum
 
-        if row['pc_id'] is None or row['road'] is None:
+        if row['road'] is None:
             skipped += 1
             continue
 
-        try:
-            postcode, city, country = postcode_map[row['pc_id']]
-            db.execute("SELECT * FROM get_record_ids(%s::text, %s::text, %s::text, %s::text);", (city, postcode, row['road'], row['house_number']))
-            result = db.fetchone()
-        except KeyError:
-            skipped += 1
-            continue
+        house_number = row['house_number'].upper()
+        road = row['road'].title()
 
-        city_id = result['city_id']
-        if city_id is None:
-            # create city
-            db.execute('INSERT INTO city (city, postcode, license_id) VALUES (%s, %s, 1) RETURNING id;', (city, postcode))
-            city_id = db.fetchone()['id']
+        db.execute("SELECT * FROM get_record_ids(%s::text, %s::text);", (road, house_number))
+        result = db.fetchone()
 
         street_id = result['street_id']
         if street_id is None:
             # create street
-            db.execute('INSERT INTO street (street, city_id) VALUES (%s, %s) RETURNING id;', (row['road'], city_id))
+            db.execute('INSERT INTO street (street, city_id) VALUES (%s, %s) RETURNING id;', (road, city_id))
             street_id = db.fetchone()['id']
 
         house_id = result['house_id']
@@ -331,7 +334,7 @@ def _convert(id_start, id_end, postcode_map, db_url, line):
             geo = geohash.encode(row['lat'], row['lon'])
             db.execute(
                 'INSERT INTO house (location, name, housenumber, geohash, street_id, source) VALUES (%s, %s, %s, %s, %s, \'openstreetmap\') RETURNING id;',
-                (row['location'], row['name'], row['house_number'], geo, street_id)
+                (row['location'], row['name'].title(), house_number, geo, street_id)
             )
             house_id = db.fetchone()['id']
 
@@ -339,9 +342,34 @@ def _convert(id_start, id_end, postcode_map, db_url, line):
 
     close_db(db)
 
-def dump(db_url, filename):
-    print(f'Dumping database into {filename}...')
-    print('Not implemented')
+def dump(db_url, filename, threads):
+    print(f'Dumping database into directory {filename}...')
+    parsed = urlparse(db_url)
+    args = [
+        'pg_dump',
+        '-v',                    # verbose
+        '-F', 'd',               # directory type
+        '-j', str(threads),      # number of concurrent jobs
+        '-Z', '9',               # maximum compression
+        '-T', 'osm_buildings',   # exclude osm data
+        '-T', 'osm_admin',
+        '-T', 'osm_postal_code',
+        '-T', 'osm_roads',
+        '-O',                    # no owners
+        '-x',                    # no privileges
+        '-f', filename,          # destination dir
+        '-h', parsed.hostname,
+    ]
+
+    if parsed.port is not None:
+        args.append('-p')
+        args.append(str(parsed.port))
+    if parsed.username is not None:
+        args.append('-U')
+        args.append(parsed.username)
+    args.append(parsed.path[1:])
+    print(" ".join(args))
+    subprocess.run(args)
 
 #
 # Cmdline interface
@@ -405,4 +433,4 @@ if __name__ == '__main__':
     if args.convert:
         convert_osm(args.db_url, args.threads)
     if args.dump_file:
-        dump(args.db_url, args.dump_file)
+        dump(args.db_url, args.dump_file, args.threads)

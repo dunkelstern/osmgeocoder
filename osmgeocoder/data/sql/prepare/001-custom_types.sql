@@ -31,32 +31,32 @@ BEGIN
 END
 $$;
 
-CREATE OR REPLACE FUNCTION get_record_ids(city_in TEXT, postcode_in TEXT, street_in TEXT, housenumber_in TEXT) RETURNS TABLE (
-	city_id int8,
-	street_id int8,
-	house_id int8
-) AS
+CREATE OR REPLACE FUNCTION get_city_id(city_in TEXT, postcode_in TEXT) RETURNS int8 AS
 $$
-DECLARE
-	cty int8;
-	strt int8;
-	hs int8;
-BEGIN
     SELECT
         c.id
-    INTO cty
     FROM city c
     WHERE
         c.city = city_in
         AND c.postcode = postcode_in
     LIMIT 1;
+$$ LANGUAGE 'sql';
 
+CREATE OR REPLACE FUNCTION get_record_ids(city_id_in int8, street_in TEXT, housenumber_in TEXT) RETURNS TABLE (
+	street_id int8,
+	house_id int8
+) AS
+$$
+DECLARE
+	strt int8;
+	hs int8;
+BEGIN
 	SELECT
 	    s.id
 	INTO strt
 	FROM street s
 	WHERE
-	    s.city_id = cty
+	    s.city_id = city_id_in
 	    AND s.street = street_in
 	LIMIT 1;
 
@@ -69,7 +69,6 @@ BEGIN
 		AND h.housenumber = housenumber_in
 	LIMIT 1;
 
-	city_id := cty;
 	street_id := strt;
 	house_id := hs;
 	RETURN NEXT;
