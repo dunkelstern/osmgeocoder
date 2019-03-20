@@ -9,11 +9,11 @@ setup(
         version='1.1.0',
         description='OpenStreetMap and OpenAddresses.io based geocoder',
         long_description='''
-            Python implementation for a OSM Geocoder.
+            Python implementation for a OSM / Openaddresses.io Geocoder.
 
             This geocoder is implemented in PostgreSQL DB functions as much as possible, there is a simple API and an example flask app included.
 
-            You will need PostgreSQL 9.4+ with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
+            You will need PostgreSQL 11.0+ with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
 
             Data import will be done via [Omniscale's imposm3](https://github.com/omniscale/imposm3) and a supplied python script to import the openaddresses.io data.
 
