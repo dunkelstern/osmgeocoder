@@ -107,7 +107,7 @@ def prepare_db(db):
 
         CREATE TABLE IF NOT EXISTS public.oa_house (
             id uuid,
-            location geometry(POINT, 3857),
+            location gis.geometry(POINT, 3857),
             "name" TEXT,
             housenumber TEXT,
             geohash TEXT,
