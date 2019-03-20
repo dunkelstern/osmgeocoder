@@ -1,5 +1,7 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from pyproj import Proj
+from time import time
 
 def fetch_address(geocoder, center, radius, limit=1):
     """
@@ -16,27 +18,35 @@ def fetch_address(geocoder, center, radius, limit=1):
     :param limit: maximum number of results to return
     """
 
+    # calculate shard to query
+    mercProj = Proj(init='epsg:3857')
+    x, y = mercProj(center[1], center[0])
+
     query = '''
-        SELECT * FROM point_to_address_{typ}(
-            ST_Transform(
-                ST_SetSRID(
-                    ST_MakePoint(%(lon)s, %(lat)s),
-                    4326
-                ),
+        SELECT * FROM point_to_address_osm(
+            ST_SetSRID(
+                ST_MakePoint(%(x)s, %(y)s),
                 3857
             ),
             %(radius)s
-        ) LIMIT %(limit)s;
-    '''
+        ) LIMIT {limit};
+    '''.format(limit=int(limit))
 
     cursor = geocoder.db.cursor(cursor_factory=RealDictCursor)
+    cursor.execute(query, { 'x': x, 'y': y, 'radius': radius })
 
-    for typ in ['osm', 'oa']:
-        q = query.format(typ=typ)
-        cursor.execute(q, { 'lat': center[0], 'lon': center[1], 'radius': radius, 'limit': limit })
-
-        if cursor.rowcount > 0:
-            break
+    if cursor.rowcount == 0:
+        # try openaddresses.io
+        query = '''
+        SELECT * FROM point_to_address_oa(
+            ST_SetSRID(
+                ST_MakePoint(%(x)s, %(y)s),
+                3857
+            ),
+            %(radius)s
+        ) LIMIT {limit};
+        '''.format(limit=int(limit))
+        cursor.execute(query, { 'x': x, 'y': y, 'radius': radius })
 
     for result in cursor:
         yield result

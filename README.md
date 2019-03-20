@@ -1,10 +1,10 @@
 # OSMGeocoder
 
-Python implementation for a OSM Geocoder.
+Python implementation for a OSM / Openaddresses.io Geocoder.
 
 This geocoder is implemented in PostgreSQL DB functions as much as possible, there is a simple API and an example flask app included.
 
-You will need PostgreSQL 9.4+ with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
+You will need PostgreSQL 11.0+ with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
 
 Data import will be done via [Omniscale's imposm3](https://github.com/omniscale/imposm3) and a supplied python script to import the openaddresses.io data.
 
@@ -16,40 +16,57 @@ See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) 
 
 ## TODO
 
-- Implement forward geocoding on openaddresses.io data
-- Speed up openaddresses.io import, we could write a `COPY`-able import file for postgres probably.
 - Return Attribution in API and in webservices
 
-## Quick and dirty how-to
+## "Quick" and dirty how-to
 
-1. Create a PostgreSQL Database
+Just for your information, this process takes a lot of time for a big import. Example figures on a machine with a Core i7-7700K on 4.2 GHz with a Samsung (SATA-)SSD and 32GB of RAM (and some tuned buffer sizes for Postgres):
+
+- Import of the Europe-Region of OpenStreetMap:
+    - Import time: 3 hours
+    - OSM Data file: 20 GB
+    - Temporary space needed: 35 GB
+    - Final size in DB: 58.7 GB
+    - Summary of space requirement: 115 GB
+- Import of the two Openaddresses.io files for Europe:
+    - Import time: 1 hour
+    - Data files: 4 GB
+    - Temporary space needed: 2 GB
+    - Final size in DB: 18 GB
+    - Summary of space requirement: 24 GB
+- Conversion of the OpenStreetMap data into geocoding format:
+    - Conversion time: 5 hours
+    - Final size in DB: 10.5GB
+
+So in summary you'll need 9 hours of time and 150 GB of disk space.
+After cleanup you'll need 28.5 GB of disk space for the Europe data set. A compressed DB export of the converted data sums up to 2.8 GB of RAW data and will explode on import to the said 28 GB.
+
+1. Create a PostgreSQL Database (we use the name `osmgeocoder` in the example)
 2. Create the PostGIS, trigram and fuzzy string search extension for the DB:
 ```sql
-CREATE EXTENSION postgis;
-CREATE EXTENSION pg_trgm;
-CREATE EXTENSION fuzzystrmatch;
+CREATE SCHEMA gis; -- isolate postgis into its own schema for easier development
+ALTER DATABASE osmgeocoder SET search_path TO public, gis; -- set search path to include the gis schema
+CREATE EXTENSION postgis WITH SCHEMA gis; -- put postgis into gis schema
+CREATE EXTENSION pg_trgm; -- trigram search, used for forward geocoding
+CREATE EXTENSION pgcrypto; -- used to generate uuids
+CREATE EXTENSION fuzzystrmatch; -- metaphone seatch, used for text prediction
 ```
 3. Fetch a copy of [imposm3](https://github.com/omniscale/imposm3)
 4. Get a OpenStreetMap data file (for example from [Geofabrik](http://download.geofabrik.de/), start with a small region!)
-5. Import some OpenStreetMap data into the DB (grab a coffee or two):
-```bash
-$ imposm import -connection postgis://user:password@host:port/database -mapping doc/imposm_mapping.yml -read /path/to/osm.pbf -write -deployproduction -optimize
-```
-6. Create a virtualenv and install packages:
+5. Create a virtualenv and install packages:
 ```bash
 mkvirtualenv -p /usr/bin/python3 osmgeocoder
 workon osmgeocoder
 pip install -r requirements.txt
 ```
-7. Modify configuration file to match your setup. The example config is in `doc/config-example.json`.
-8. Create a trigram search indices and text prediction wordlists (this could take a while, grab another coffee or take a nap) and prepare the Database:
+6. See below for importing openaddresses.io data if needed
+7. Import some OpenStreetMap data into the DB (grab a coffee or two):
 ```bash
-workon osmgeocoder
-bin/prepare_osm.py
+$ bin/prepare_osm.py --db postgresql://user:password@localhost/osmgeocoder --import-data osm.pbf --optimize
 ```
+8. Modify configuration file to match your setup. The example config is in `doc/config-example.json`.
 9. Optionally install and start the postal machine learning address categorizer (see below)
-10. Optionally import openaddresses.io data (see below, and yes, grab another coffee)
-11. Geocode:
+10. Geocode:
 ```bash
 bin/address2coordinate.py --config config/config.json --center 48.3849 10.8631 Lauterl
 bin/coordinate2address.py --config config/config.json 48.3849 10.8631
@@ -57,11 +74,36 @@ bin/coordinate2address.py --config config/config.json 48.3849 10.8631
 
 **NOTE:** you can also install this via pip:
 - the scripts from the `bin` directory will be copied to your environment.
-- the SQL files will be placed in your virtualenv in `osmgeocoder/data/sql`
-- the YAML files will be placed in your virtualenv in `osmgeocoder/data/yml`
 - An example config file will be placed in your virtualenv in `osmgeocoder/data/config-example.json`
 - The PIP installation will not install `flask` and `gunicorn` nor will it try to install `postal`,
   if you want to use those services you need to install those optional dependencies yourself (read on!)
+
+
+## Optional import of openaddresses.io data
+
+For some countries there are not enough buildings tagged in the OSM data so we can use the [OpenAddresses.io](http://results.openaddresses.io) data to augment the OSM data.
+
+The import is relatively slow as the data is contained in a big bunch of zipped CSV files, we try to use more threads to import the data faster but it could take a while...
+
+### Importing openaddresses.io data
+
+```bash
+workon osmgeocoder # switch to the virtualenv
+wget https://s3.amazonaws.com/data.openaddresses.io/openaddr-collected-europe.zip # download openaddress.io data
+bin/import_openaddress_data.py \ # run an import
+    --db postgresql://user:password@host/dbname \
+    --threads 4 \
+    --optimize \
+    openaddr-collected-europe.zip
+```
+
+When you have imported the data it will create some tables in your DB, `license` which contains the licenses of the imported data (the API will return the license attribution string with the data), `oa_city` which is a foreign key target from `oa_street` which in turn is a fk target to `oa_house` which contains the imported data.
+
+If you want to import more than one file, just do so, the tables will not be cleared between import runs, the indices will be dropped and rebuilt after the import though. Skip the `--optimize` flag for the imports and run an optimize only pass last to save some time.
+
+If you want to save even more time import with `--fast`, but be aware this leaves the DB without any indices or foreign key constraints, an optimize pass is required after importing with this flag!
+
+If you want to start over run the command with the `--clean-start` flag... Be careful, this destroys all openaddresses.io data in the tables.
 
 
 ## Optional support for libpostal
@@ -128,30 +170,6 @@ gunicorn postal_service:app \
 ```
 
 **Attention**: Every worker takes that 2GB RAM toll!
-
-## Optional import of openaddresses.io data
-
-For some countries there are not enough buildings tagged in the OSM data so we can use the [OpenAddresses.io](http://results.openaddresses.io) data to augment the OSM data.
-
-The import is relatively slow as the data is contained in a big bunch of zipped CSV files, we try to use more threads to import the data faster but it could take a while...
-
-### Importing openaddresses.io data
-
-```bash
-workon osmgeocoder
-wget https://s3.amazonaws.com/data.openaddresses.io/openaddr-collected-europe.zip
-import_openaddress_data.py \
-    --db postgresql://localhost/osm \
-    --threads 4 \
-    --optimize \
-    openaddr-collected-europe.zip
-```
-
-When you have imported the data it will create some tables in your DB, `oa_license` which contains the licenses of the imported data (the API will return the license attribution string with the data), `oa_city` which is a foreign key target from `oa_street` which in turn is a fk target to `oa_house` which contains the imported data.
-
-If you want to import more than one file, just do so, the tables will not be cleared between import runs, the indices will be dropped and rebuilt after the import though. (Skip the `--optimize` flag for the first import and only append it on the last file you import to save some time)
-
-The geocoder class will automatically detect the two imported tables and use them if the OSM queries did not return a sufficiently exact result.
 
 ## Running a HTTP geocoding service
 
@@ -271,7 +289,7 @@ The complete project contains actually only two classes:
 Publicly accessible method prototypes are:
 
 ```python
-def __init__(self, config):
+def __init__(self, db=None, db_handle=None, address_formatter_config=None, postal=None):
     pass
 
 def forward(self, address, country=None, center=None):
@@ -287,9 +305,10 @@ def predict_text(self, input):
 #### `__init__`
 
 Initialize a geocoder, this will read all files to be used and set up the DB connection.
-- `db`: Dictionary with DB config
+- `db`: Dictionary with DB config, when used the geocoder will create a DB-connection on its own
+- `db_handle`: Postgres connection, use this if the connection is handled outside the scope of the geocoder (for example when you want to use the geocoder in Django)
 - `address_formatter_config`: Path to the `worldwide.yaml` (optional)
-- `postal`: Dictionary with postal config (`service_url` and `port` keys)
+- `postal`: Dictionary with postal config (`service_url` and `port` keys), currently unused
 
 see __Config File__ above for more info.
 
