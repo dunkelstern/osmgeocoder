@@ -5,19 +5,29 @@ from shapely.wkb import loads
 from pyproj import Proj, transform
 
 from .format import AddressFormatter
-from .reverse import fetch_address, prepare_statements
+from .reverse import fetch_address
 from .forward import fetch_coordinate
 
 
 class Geocoder():
 
-    def __init__(self, db={}, address_formatter_config=None, postal=None):
-        self.postal_service = postal
-        self.db = self._init_db(db)
-        self.formatter = AddressFormatter(config=address_formatter_config)
+    def __init__(self, db=None, db_handle=None, address_formatter_config=None, postal=None):
+        """
+        Initialize a new geocoder
 
-        # prepare statements for each of the 360 shard tables
-        prepare_statements(self, 360)
+        :param db: DB Connection string (mutually exclusive with ``db_handle``)
+        :param db_handle: Already opened DB Connection, useful if this connection
+                          is handled by a web framework like django
+        :param address_formatter_config: Custom configuration for the address formatter,
+                                         by default uses the datafile included in the bundle
+        :param postal:
+        """
+        self.postal_service = postal
+        if db is not None:
+            self.db = self._init_db(db)
+        if db_handle is not None:
+            self.db = db_handle
+        self.formatter = AddressFormatter(config=address_formatter_config)
 
     def _init_db(self, db_config):
         connstring = []

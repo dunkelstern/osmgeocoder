@@ -14,7 +14,7 @@ tables:
     - name: type
       type: mapping_value
     - key: addr:street
-      name: road
+      name: street
       type: string
     - key: addr:housenumber
       name: house_number
@@ -36,7 +36,7 @@ tables:
     - name: type
       type: mapping_value
     - key: name
-      name: road
+      name: street
       type: string
     - name: class
       type: mapping_key
@@ -108,3 +108,27 @@ tables:
       boundary:
       - postal_code
     type: polygon
+  house_number:
+    columns:
+    - name: osm_id
+      type: id
+    - name: geometry
+      type: geometry
+    - key: addr:city
+      name: city
+      type: string
+    - key: addr:postcode
+      name: postcode
+      type: string
+    - key: addr:street
+      name: street
+      type: string
+    - key: addr:housenumber
+      name: house_number
+      type: string
+    mapping:
+      __any__: [__any__]
+    filters:
+      require:
+        addr:housenumber: [__any__]
+    type: point

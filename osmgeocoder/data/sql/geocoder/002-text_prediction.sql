@@ -1,14 +1,14 @@
 --
 -- Predict text from user input to be used in autocompletion
 --
-CREATE OR REPLACE FUNCTION predict_text(user_input text) RETURNS TABLE (word text, ct int, dist int) AS
+CREATE OR REPLACE FUNCTION public.predict_text(user_input text) RETURNS TABLE (word text, ct int, dist int) AS
 $$
     -- find some approximate matches
     SELECT
         word,   -- the word found, probably longer or error corrected
         ct,     -- usage count of the word in the wordlist, words with higher usage counts are to be ranked higher
         levenshtein(substr(word, 0, length(user_input) + 1), user_input) AS dist -- levenshtein edit distance
-    FROM osm_wordlist
+    FROM public.wordlist
     WHERE
         (
            -- search for all variants of double metaphone matches, uses the trigram indices created earlier
