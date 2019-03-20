@@ -139,11 +139,19 @@ def prepare_db(db):
     max_val = 20026376.39
     val_inc = (max_val - min_val) / PARTITION_SIZE
     for i in range(0, PARTITION_SIZE):
-        print(f' - {i}: {min_val + val_inc * i} TO {min_val + val_inc * (i + 1)}')
-        db.execute(f'''
-            CREATE TABLE IF NOT EXISTS public.oa_house_{i}
-            PARTITION OF public.oa_house FOR VALUES FROM ({min_val + val_inc * i}) TO ({min_val + val_inc * (i + 1)});
-        ''')
+        print('  {}" {} TO {}'.format(
+            i,
+            min_val + val_inc * i,
+            min_val + val_inc * (i + 1)
+        ))
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS public.oa_house_{}
+            PARTITION OF public.oa_house FOR VALUES FROM ({}) TO ({});
+        '''.format(
+            i,
+            min_val + val_inc * i,
+            min_val + val_inc * (i + 1)
+        ))
 
     print('Dropping indices and constraints for speed improvement...')
     db.execute('''
@@ -290,7 +298,9 @@ def import_licenses(license_data, db):
             #     continue
             fname = record['file'] + '.csv'
             licenses[fname] = save_license(record, db)
-            print(f'Saved license for {fname}: {licenses[fname]}')
+            print('Saved license for {}: {}'.format(
+                fname, licenses[fname]
+            ))
 
             record = {
                 'file': None,
@@ -326,8 +336,9 @@ def import_license_from_readme(readme_data, fname, db):
                 record['attribution'] = a
 
     licenses[fname] = save_license(record, db)
-    print(f'Saved license for {fname}: {licenses[fname]}')
-
+    print('Saved license for {}: {}'.format(
+        fname, licenses[fname]
+    ))
     return licenses
 
 
@@ -557,7 +568,7 @@ def import_data(filename, threads, db_url, optimize, fast):
     import_queue = []
     for f in files:
         if f not in licenses.keys():
-            print(f'Skipping {f}, no license data')
+            print('Skipping {}, no license data'.format(f))
             continue
         status_object[f] = -1
         import_queue.append((filename, f, licenses[f], db_url, status_object))

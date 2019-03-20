@@ -35,7 +35,7 @@ def load_sql(db, path):
             sql_files = list(resource_listdir('osmgeocoder', path))
             sql_files.sort()
             for f in sql_files:
-                print(f'Executing {f}...')
+                print('Executing {}...'.format(f))
                 db.execute(resource_string('osmgeocoder', os.path.join(path, f)))
     except ModuleNotFoundError:
         # if not found, assume we have been started from a source checkout
@@ -45,7 +45,7 @@ def load_sql(db, path):
         sql_files.sort()
 
         for f in sql_files:
-            print(f'Executing {f}...')
+            print('Executing {}...'.format(f))
             with open(f, 'r') as fp:
                 db.execute(fp.read())
 
@@ -105,7 +105,7 @@ def imposm_import(db_url, data_file, tmp_dir, optimize):
         temp.close()
 
 def dump(db_url, filename, threads):
-    print(f'Dumping database into directory {filename}...')
+    print('Dumping database into directory {}...'.format(filename))
     parsed = urlparse(db_url)
     args = [
         'pg_dump',
