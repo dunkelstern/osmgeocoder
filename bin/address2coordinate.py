@@ -60,4 +60,4 @@ results = geocoder.forward(args.address, **kwargs)
 print('Resolved "{}" to'.format(args.address))
 for addr, lat, lon in results:
     addr = ', '.join(addr.split("\n")).strip()
-    print(f" - {addr} -> {lat}, {lon}")
+    print(" - {} -> {}, {}".format(addr, lat, lon))

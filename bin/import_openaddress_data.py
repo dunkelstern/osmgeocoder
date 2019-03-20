@@ -350,7 +350,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     key_houses = intern('houses')
     key_id = intern('id')
 
-    print(f"\033[{line};0H\033[KPreparing data for {name}, 0%...")
+    print("\033[{line};0H\033[KPreparing data for {name}, 0%...".format(line=line, name=name))
 
     # projection setup, we need WebMercator
     mercProj = Proj(init='epsg:3857')
@@ -412,7 +412,9 @@ def import_csv(csv_stream, size, license_id, name, db, line):
         # status update
         if time() - timeout > 1.0:
             percentage = round(wrapped.position / size * 100.0, 2)
-            print(f"\033[{line};0H\033[KPreparing data for {name}, {percentage} %...")
+            print("\033[{line};0H\033[KPreparing data for {name}, {percentage} %...".format(
+                line=line, name=name, percentage=percentage
+            ))
             timeout = time()
 
     # force cleaning up to avoid memory bloat
@@ -427,7 +429,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     house_file  = TemporaryFile(mode='w+', buffering=16*1024*1024)
 
     # start insertion cycle
-    print(f"\033[{line};0H\033[KInserting data for {name}...")
+    print("\033[{line};0H\033[KInserting data for {name}...".format(line=line, name=name))
 
     city_count = 0
     row_count = 0
@@ -515,27 +517,46 @@ def import_csv(csv_stream, size, license_id, name, db, line):
             if time() - timeout > 1.0:
                 eta = round((len(cities) / city_count * (time() - start)) - (time() - start))
                 percentage = round((city_count / len(cities) * 100), 2)
-                print(f"\033[{line};0H\033[K - {name:40}, {percentage:>6}%, {row_count:>6} rows/second, eta: {eta:>5} seconds")
+                print("\033[{line};0H\033[K - {name:40}, {percentage:>6}%, {row_count:>6} rows/second, eta: {eta:>5} seconds".format(
+                    line=line,
+                    name=name,
+                    percentage=percentage,
+                    row_count=row_count,
+                    eta=eta
+                ))
                 row_count = 0
                 timeout = time()
 
     del cities
 
     # now COPY the contents of the temp file into the DB
-    print(f"\033[{line};0H\033[K -> Running copy from tempfile for city ({round(city_file.tell() / 1024 / 1024, 2)} MB)...")
+    print("\033[{line};0H\033[K -> Running copy from tempfile for city ({size} MB)...".format(
+        line=line,
+        size=round(city_file.tell() / 1024 / 1024, 2)
+    ))
     city_file.seek(0)
     db.copy_from(city_file, 'public.oa_city', columns=('id', 'city', 'district', 'region', 'postcode', 'license_id'))
 
-    print(f"\033[{line};0H\033[K -> Running copy from tempfile for street ({round(street_file.tell() / 1024 / 1024, 2)} MB)...")
+    print("\033[{line};0H\033[K -> Running copy from tempfile for street ({size} MB)...".format(
+        line=line,
+        size=round(street_file.tell() / 1024 / 1024, 2)
+    ))
     street_file.seek(0)
     db.copy_from(street_file, 'public.oa_street', columns=('id', 'street', 'unit', 'city_id'))
 
-    print(f"\033[{line};0H\033[K -> Running copy from tempfile for house ({round(house_file.tell() / 1024 / 1024, 2)} MB)...")
+    print("\033[{line};0H\033[K -> Running copy from tempfile for house ({size} MB)...".format(
+        line=line,
+        size=round(house_file.tell() / 1024 / 1024, 2)
+    ))
     house_file.seek(0)
     db.copy_from(house_file, 'public.oa_house', columns=('id', 'location', 'housenumber', 'geohash', 'source', 'street_id'))
 
     # cleanup
-    print(f"\033[{line};0H\033[K -> Inserting for {name} took {round(time() - start)} seconds.")
+    print("\033[{line};0H\033[K -> Inserting for {name} took {elapsed} seconds.".format(
+        line=line,
+        name=name,
+        elapsed=round(time() - start)
+    ))
     house_file.close()
     street_file.close()
     city_file.close()

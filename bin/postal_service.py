@@ -108,5 +108,5 @@ if __name__ == "__main__":
         "gunicorn",
         "postal_service:app",
         "--bind",
-        f"127.0.0.1:{config['postal']['port']}"
+        "127.0.0.1:{}".format(config['postal']['port'])
     )
