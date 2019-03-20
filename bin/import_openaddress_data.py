@@ -6,6 +6,7 @@ import argparse
 import psycopg2
 import hashlib
 import random
+import uuid
 from time import time, sleep
 from psycopg2.extras import execute_batch
 import io
@@ -51,8 +52,10 @@ class CountingTextIOWrapper(io.TextIOWrapper):
 # DB-Utility functions
 #
 
-def open_db(url):
+def open_db(url, transaction=True):
     conn = psycopg2.connect(url)
+    if not transaction:
+        conn.autocommit = True
     cursor = conn.cursor()
     return cursor
 
@@ -78,44 +81,44 @@ def prepare_db(db):
         END
         $$;
 
-        CREATE TABLE IF NOT EXISTS license (
-            id SERIAL PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS public.oa_license (
+            id uuid PRIMARY KEY default gen_random_uuid(),
             website TEXT,
             license TEXT,
             attribution TEXT,
             "source" TEXT
         );
 
-        CREATE TABLE IF NOT EXISTS city (
-            id SERIAL8 PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS public.oa_city (
+            id uuid PRIMARY KEY,
             city TEXT,
             district TEXT,
             region TEXT,
             postcode TEXT,
-            license_id INT
+            license_id uuid
         );
 
-        CREATE TABLE IF NOT EXISTS street (
-            id SERIAL8 PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS public.oa_street (
+            id uuid PRIMARY KEY,
             street TEXT,
             unit TEXT,
-            city_id INT8
+            city_id uuid
         );
 
-        CREATE TABLE IF NOT EXISTS house (
-            id SERIAL8,
+        CREATE TABLE IF NOT EXISTS public.oa_house (
+            id uuid,
             location geometry(POINT, 3857),
             "name" TEXT,
             housenumber TEXT,
             geohash TEXT,
-            street_id INT8,
+            street_id uuid,
             "source" coordinate_source
         ) PARTITION BY RANGE (ST_X(location));
 
         --
         -- Re-assembly of openaddresses.io data into one view
         --
-        CREATE OR REPLACE VIEW address_data AS (
+        CREATE OR REPLACE VIEW public.oa_address_data AS (
             SELECT
                 h.id,
                 h."name",
@@ -125,9 +128,9 @@ def prepare_db(db):
                 c.city,
                 location,
                 h."source"
-            FROM house h
-            JOIN street s ON h.street_id = s.id
-            JOIN city c ON s.city_id = c.id
+            FROM public.oa_house h
+            JOIN public.oa_street s ON h.street_id = s.id
+            JOIN public.oa_city c ON s.city_id = c.id
         );
     ''')
 
@@ -138,95 +141,105 @@ def prepare_db(db):
     for i in range(0, PARTITION_SIZE):
         print(f' - {i}: {min_val + val_inc * i} TO {min_val + val_inc * (i + 1)}')
         db.execute(f'''
-            CREATE TABLE IF NOT EXISTS house_{i}
-            PARTITION OF house FOR VALUES FROM ({min_val + val_inc * i}) TO ({min_val + val_inc * (i + 1)});
-
-            ALTER TABLE house_{i} DROP CONSTRAINT IF EXISTS house_{i}_street_id_fk;
-            DROP INDEX IF EXISTS house_{i}_trgm_idx;
+            CREATE TABLE IF NOT EXISTS public.oa_house_{i}
+            PARTITION OF public.oa_house FOR VALUES FROM ({min_val + val_inc * i}) TO ({min_val + val_inc * (i + 1)});
         ''')
 
     print('Dropping indices and constraints for speed improvement...')
     db.execute('''
-        ALTER TABLE city DROP CONSTRAINT IF EXISTS city_license_id_fk;
-        ALTER TABLE street DROP CONSTRAINT IF EXISTS street_city_id_fk;
+        ALTER TABLE public.oa_house DROP CONSTRAINT IF EXISTS house_street_id_fk;
+        ALTER TABLE public.oa_city DROP CONSTRAINT IF EXISTS city_license_id_fk;
+        ALTER TABLE public.oa_street DROP CONSTRAINT IF EXISTS street_city_id_fk;
         DROP INDEX IF EXISTS street_trgm_idx;
         DROP INDEX IF EXISTS city_trgm_idx;
         DROP INDEX IF EXISTS street_city_id_idx;
+
+        DROP INDEX IF EXISTS house_street_id_idx;
+        DROP INDEX IF EXISTS house_location_geohash_idx;
+        DROP INDEX IF EXISTS house_trgm_idx;
+        DROP INDEX IF EXISTS house_location_idx;
+        DROP INDEX IF EXISTS house_id_idx;
+        DROP INDEX IF EXISTS house_housenumber_idx;
     ''')
 
 def finalize_db(db, optimize=False):
     print('Finalizing import and cleaning up...')
+    sql = []
+
     if optimize is False:
-        print('Creating reverse fk indices...')
-        for i in range(0, PARTITION_SIZE):
-            db.execute(f'''
-                CREATE INDEX house_{i}_street_id_idx ON house_{i} USING BTREE(street_id);
-                ANALYZE house_{i};
-            ''')
+        sql.extend([
+            ('house: Street ID index',            'CREATE INDEX IF NOT EXISTS house_street_id_idx ON public.oa_house USING BTREE(street_id);'),
+            ('street: City ID index',             'CREATE INDEX IF NOT EXISTS street_city_id_idx ON public.oa_street USING BTREE(city_id);'),
+            ('house: Update planner statistics',  'ANALYZE public.oa_house;'),
+            ('city: Update planner statistics',   'ANALYZE public.oa_city;'),
+            ('street: Update planner statistics', 'ANALYZE public.oa_street;')
+        ])
 
-        db.execute('''
-            DROP INDEX IF EXISTS street_city_id_idx;
-            CREATE INDEX street_city_id_idx ON street USING BTREE(city_id);
-            ANALYZE city;
-            ANALYZE street;
-        ''')
+    sql.extend([
+        ('house: FK constraint',  'ALTER TABLE public.oa_house ADD CONSTRAINT house_street_id_fk FOREIGN KEY (street_id) REFERENCES public.oa_street (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;'),
+        ('city: FK constraint',   'ALTER TABLE public.oa_city ADD CONSTRAINT city_license_id_fk FOREIGN KEY (license_id) REFERENCES public.oa_license (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;'),
+        ('street: FK constraint', 'ALTER TABLE public.oa_street ADD CONSTRAINT street_city_id_fk FOREIGN KEY (city_id) REFERENCES public.oa_city (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;')
+    ])
+
+    for log, item in sql:
+        print(' - {}'.format(log))
+        db.execute(item)
 
 
-    print('Creating fk indices...')
-    for i in range(0, PARTITION_SIZE):
-        db.execute(f'''
-            ALTER TABLE house_{i} DROP CONSTRAINT IF EXISTS house_{i}_street_id_fk;
-            ALTER TABLE house_{i} ADD CONSTRAINT house_{i}_street_id_fk FOREIGN KEY (street_id) REFERENCES street (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
-        ''')
-    db.execute('''
-        ALTER TABLE city ADD CONSTRAINT city_license_id_fk FOREIGN KEY (license_id) REFERENCES license (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
-        ALTER TABLE street ADD CONSTRAINT street_city_id_fk FOREIGN KEY (city_id) REFERENCES city (id) ON DELETE CASCADE ON UPDATE CASCADE INITIALLY DEFERRED;
-    ''')
+def cluster_worker(id, db_url):
+    # open all connections and inputs
+    db = open_db(db_url)
 
-def cluster(i, url):
-    print(f'Running optimize on shard {i}...')
-    db = open_db(url)
-    db.execute(f'''
-        DROP INDEX IF EXISTS house_{i}_street_id_idx;
-        DROP INDEX IF EXISTS house_{i}_location_geohash_idx;
-        DROP INDEX IF EXISTS house_{i}_trgm_idx;
-        DROP INDEX IF EXISTS house_{i}_location_idx;
-        DROP INDEX IF EXISTS house_{i}_id_idx;
-        DROP INDEX IF EXISTS house_{i}_housenumber_idx;
+    print('{i}, '.format(i=id), end='', flush=True)
+    db.execute('CLUSTER public.oa_house_{i} USING oa_house_{i}_geohash_idx;'.format(i=id))
 
-        CREATE INDEX house_{i}_location_geohash_idx ON house_{i} USING BTREE(geohash);
-        CLUSTER house_{i} USING house_{i}_location_geohash_idx;
-        CREATE INDEX house_{i}_trgm_idx ON house_{i} USING GIN (housenumber gin_trgm_ops);
-        CREATE INDEX house_{i}_location_idx ON house_{i} USING GIST(location);
-        CREATE INDEX house_{i}_housenumber_idx ON house_{i} USING BTREE(housenumber);
-        CREATE INDEX house_{i}_id_idx ON house_{i} USING BTREE(id);
-        ANALYZE house_{i};
-    ''')
     close_db(db)
 
+
 def optimize_db(db, threads, url):
-    work_queue = []
+    print('Adding indices on tables...')
+    sql = [
+        ('house: Geohash',                    'CREATE INDEX IF NOT EXISTS house_location_geohash_idx ON public.oa_house USING BTREE(geohash);'),
+        #('Cluster house on geohash',         'CLUSTER house USING house_location_geohash_idx;'),
+        ('house: House number trigram index', 'CREATE INDEX IF NOT EXISTS house_trgm_idx ON public.oa_house USING GIN (housenumber gin_trgm_ops);'),
+        ('house: Spatial index on location',  'CREATE INDEX IF NOT EXISTS house_location_idx ON public.oa_house USING GIST(location);'),
+        ('house: Btree index house number',   'CREATE INDEX IF NOT EXISTS house_housenumber_idx ON public.oa_house USING BTREE(housenumber);'),
+        ('house: Btree index id',             'CREATE INDEX IF NOT EXISTS house_id_idx ON public.oa_house USING BTREE(id);'),
+        ('house: Update planner statistics',  'ANALYZE public.oa_house;'),
+
+        ('city: Trigram index name',          'CREATE INDEX IF NOT EXISTS city_trgm_idx ON public.oa_city USING GIN (city gin_trgm_ops);'),
+        ('city: Btree Postcode',              'CREATE INDEX IF NOT EXISTS city_postcode_idx ON public.oa_city USING BTREE(postcode);'),
+        ('city: Btree name',                  'CREATE INDEX IF NOT EXISTS city_city_idx ON public.oa_city USING BTREE(city);'),
+        ('city: Update planner statistics',   'ANALYZE public.oa_city;'),
+
+        ('street: Trigram index name',        'CREATE INDEX IF NOT EXISTS street_trgm_idx ON public.oa_street USING GIN (street gin_trgm_ops);'),
+        ('street: Update planner statistics', 'ANALYZE public.oa_street;'),
+    ]
+
+    for log, item in sql:
+        print(' - {}'.format(log))
+        db.execute(item)
+
+    print('Clustering house tables...')
+    queue = []
     for i in range(0, PARTITION_SIZE):
-        work_queue.append((i, url))
+        queue.append((i, url))
 
-    with Pool(threads, maxtasksperchild=1) as p:
-        p.starmap(cluster, work_queue, 1)
-
-    print('Adding trigram indices on non-sharded tables...')
-    db.execute('''
-        CREATE INDEX IF NOT EXISTS city_trgm_idx ON city USING GIN (city gin_trgm_ops);
-        CREATE INDEX IF NOT EXISTS street_trgm_idx ON street USING GIN (street gin_trgm_ops);
-        CREATE INDEX IF NOT EXISTS city_postcode_idx ON city USING BTREE(postcode);
-        CREATE INDEX IF NOT EXISTS city_city_idx ON city USING BTREE(city);
-        ANALYZE street;
-        ANALYZE city;
-    ''')
+    # run and wait for all import threads to exit
+    if threads == 1:
+        for f in queue:
+            cluster_worker(*f)
+    else:
+        with Pool(threads, maxtasksperchild=1) as p:
+            p.starmap(cluster_worker, queue, 1)
+    print('ok')
 
     finalize_db(db)
 
 def close_db(db):
     conn = db.connection
-    conn.commit()
+    if conn.autocommit is False:
+        conn.commit()
 
     db.close()
     conn.close()
@@ -236,7 +249,7 @@ def close_db(db):
 #
 
 def save_license(record, db):
-    sql = 'INSERT INTO license (website, license, attribution, "source") VALUES (%s, %s, %s, %s) RETURNING id;'
+    sql = 'INSERT INTO public.oa_license (website, license, attribution, "source") VALUES (%s, %s, %s, %s) RETURNING id;'
     db.execute(sql, (
         record['website'],
         record['license'],
@@ -290,12 +303,41 @@ def import_licenses(license_data, db):
 
     return licenses
 
+
+def import_license_from_readme(readme_data, fname, db):
+    licenses = {}
+
+    lines = readme_data.split(b"\n")[2:] # skip header
+
+    record = {
+        'file': None,
+        'website': None,
+        'license': None,
+        'attribution': None
+    }
+    for line in lines:
+        if line.startswith(b'Website:'):
+            record['website'] = line[8:].decode('utf-8').strip()
+        elif line.startswith(b'License:'):
+            record['license'] = line[8:].decode('utf-8').strip()
+        elif line.startswith(b'Required attribution:'):
+            a = line[21:].decode('utf-8').strip()
+            if a != 'Yes':
+                record['attribution'] = a
+
+    licenses[fname] = save_license(record, db)
+    print(f'Saved license for {fname}: {licenses[fname]}')
+
+    return licenses
+
+
 def import_csv(csv_stream, size, license_id, name, db, line):
     # space optimization, reference these strings instead of copying them
     key_city = intern('city')
     key_streets = intern('streets')
     key_street = intern('street')
     key_houses = intern('houses')
+    key_id = intern('id')
 
     print(f"\033[{line};0H\033[KPreparing data for {name}, 0%...")
 
@@ -332,6 +374,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
         # add city if not already in the list
         if cty not in cities:
             cities[cty] = {
+                key_id: str(uuid.uuid4()),
                 key_city: (
                     row[5],
                     row[6],
@@ -344,6 +387,7 @@ def import_csv(csv_stream, size, license_id, name, db, line):
         # add street if not already in the list
         if strt not in cities[cty][key_streets]:
             cities[cty][key_streets][strt] = {
+                key_id: str(uuid.uuid4()),
                 key_street: (
                     row[3],
                     row[4],
@@ -367,21 +411,9 @@ def import_csv(csv_stream, size, license_id, name, db, line):
 
     # create a new temporary file for the house data as we use the postgres COPY command with that
     # for speed reasons
-    house_file = TemporaryFile(mode='w+', buffering=16*1024*1024)
-
-    # streets and cities have to be inserted the "normal" way because we need their ids
-    street_sql = '''
-        INSERT INTO street (street, unit, city_id)
-        VALUES ($1, $2, $3) RETURNING id
-    '''
-    city_sql = '''
-        INSERT INTO city (city, district, region, postcode, license_id)
-        VALUES ($1, $2, $3, $4, $5) RETURNING id
-    '''
-
-    # prepare statements
-    db.execute(f'PREPARE street AS {street_sql};')
-    db.execute(f'PREPARE city AS {city_sql};')
+    city_file   = TemporaryFile(mode='w+', buffering=16*1024*1024)
+    street_file = TemporaryFile(mode='w+', buffering=16*1024*1024)
+    house_file  = TemporaryFile(mode='w+', buffering=16*1024*1024)
 
     # start insertion cycle
     print(f"\033[{line};0H\033[KInserting data for {name}...")
@@ -393,23 +425,49 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     for key, item in cities.items():
         city_count += 1
 
-        # insert city and fetch the id
+        # save city to temp file and fetch the id
         row_count += 1
-        db.execute('EXECUTE city (%s, %s, %s, %s, %s);', [*item[key_city], license_id])
-        city_id = db.fetchone()[0]
+        city_file.write(item[key_id])
+        for value in item[key_city]:
+            city_file.write('\t')
+            if value is not None and value != '':
+                city_file.write(value.replace('\\', '\\x5c'))
+            else:
+                city_file.write(' ')
+        city_file.write('\t')
+        city_file.write(license_id)
+        city_file.write('\n')
 
-        # insert all streets
+        city_id = item[key_id]
+
+        # save street to temp file and fetch ids
         for street in item[key_streets].values():
             row_count += 1
 
             # we need the id
-            db.execute('EXECUTE street (%s, %s, %s);', [*street[key_street], city_id])
-            street_id = db.fetchone()[0]
+            street_file.write(street[key_id])
+            for value in street[key_street]:
+                street_file.write('\t')
+                if value is not None and value != '':
+                    street_file.write(value.replace('\\', '\\x5c'))
+                else:
+                    street_file.write(' ')
+            street_file.write('\t')
+            street_file.write(city_id)
+            street_file.write('\n')
+
+            street_id = street[key_id]
 
             # houses will not be inserted right away but saved to the temp file
             for nr, location in street[key_houses].items():
+                row_count += 1
+
                 # project into 3857 (mercator) from 4326 (WGS84)
                 x, y = mercProj(*location)
+
+                # id
+                house_file.write(str(uuid.uuid4()))
+                house_file.write('\t')
 
                 # create wkb representation, theoretically we could use shapely
                 # but we try to not spam newly created objects here
@@ -453,15 +511,23 @@ def import_csv(csv_stream, size, license_id, name, db, line):
     del cities
 
     # now COPY the contents of the temp file into the DB
-    print(f"\033[{line};0H\033[K -> Running copy from tempfile ({round(house_file.tell() / 1024 / 1024, 2)} MB)...")
+    print(f"\033[{line};0H\033[K -> Running copy from tempfile for city ({round(city_file.tell() / 1024 / 1024, 2)} MB)...")
+    city_file.seek(0)
+    db.copy_from(city_file, 'public.oa_city', columns=('id', 'city', 'district', 'region', 'postcode', 'license_id'))
+
+    print(f"\033[{line};0H\033[K -> Running copy from tempfile for street ({round(street_file.tell() / 1024 / 1024, 2)} MB)...")
+    street_file.seek(0)
+    db.copy_from(street_file, 'public.oa_street', columns=('id', 'street', 'unit', 'city_id'))
+
+    print(f"\033[{line};0H\033[K -> Running copy from tempfile for house ({round(house_file.tell() / 1024 / 1024, 2)} MB)...")
     house_file.seek(0)
-    db.copy_from(house_file, 'house', columns=('location', 'housenumber', 'geohash', 'source', 'street_id'))
+    db.copy_from(house_file, 'public.oa_house', columns=('id', 'location', 'housenumber', 'geohash', 'source', 'street_id'))
 
     # cleanup
     print(f"\033[{line};0H\033[K -> Inserting for {name} took {round(time() - start)} seconds.")
-    db.execute('DEALLOCATE city;')
-    db.execute('DEALLOCATE street;')
     house_file.close()
+    street_file.close()
+    city_file.close()
 
 
 def import_data(filename, threads, db_url, optimize, fast):
@@ -473,13 +539,16 @@ def import_data(filename, threads, db_url, optimize, fast):
     z = zipfile.ZipFile(filename)
     files = [f for f in z.namelist() if not f.startswith('summary/') and f.endswith('.csv')]
     files.sort()
-    if 'LICENSE.txt' not in z.namelist():
-        raise ValueError("Data file does not contain LICENSE.txt which is required")
-    licenses = import_licenses(z.read('LICENSE.txt'), db)
+    if 'LICENSE.txt' in z.namelist():
+        licenses = import_licenses(z.read('LICENSE.txt'), db)
+    elif 'README.txt' in z.namelist() and len(files) == 1:
+        licenses = import_license_from_readme(z.read('README.txt'), files[0], db)
+    else:
+        raise ValueError("Data file does not contain LICENSE.txt or README.txt which is required for licensing information")
     z.close()
 
     close_db(db)
-    sleep(5)
+    sleep(1)
 
     # prepare the work queue
     manager = Manager()
@@ -514,7 +583,7 @@ def import_data(filename, threads, db_url, optimize, fast):
 
 def worker(filename, name, license_id, db_url, status):
     # wait a random time to make the status line selection robust
-    sleep(random.random() * 3.0 + 0.5)
+    sleep(random.random() * 1.0 + 0.5)
 
     # select which line we want to use to send our status output to
     seen_lines = []
@@ -580,6 +649,13 @@ def parse_cmdline():
         help='Re-create indices and cluster the tables on the indices for speed, you can not import any more data after running optimize'
     )
     parser.add_argument(
+        '--finalize',
+        dest='finalize',
+        default=False,
+        action='store_true',
+        help='Finalize DB (automatically called when using optimize, use optimize instead)'
+    )
+    parser.add_argument(
         '--fast',
         dest='fast',
         default=False,
@@ -606,6 +682,10 @@ if __name__ == '__main__':
     if args.datafile is not None:
         import_data(args.datafile, args.threads, args.db_url, args.optimize, args.fast)
     if args.optimize:
-        db = open_db(args.db_url)
+        db = open_db(args.db_url, transaction=False)
         optimize_db(db, args.threads, args.db_url)
+        close_db(db)
+    if args.finalize:
+        db = open_db(args.db_url, transaction=False)
+        finalize_db(db)
         close_db(db)
