@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 try:
-    from flask import Flask, jsonify, abort, request
+    from flask import Flask, jsonify, abort, request, Response
+    from flask.json import dumps
 except ImportError:
     print("Error: Please install Flask, `pip install flask`")
     exit(1)
@@ -13,7 +14,7 @@ import os
 try:
     from osmgeocoder import Geocoder
 except ImportError:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from osmgeocoder import Geocoder
 
 
@@ -74,7 +75,11 @@ def reverse():
     if lat is None or lon is None:
         abort(400)
 
-    address = next(geocoder.reverse(lat, lon))
+    try:
+        address = next(geocoder.reverse(lat, lon))
+    except StopIteration:
+        return Response(dumps({"error": { "code": 404, "message": "Not found" } }), status=404)
+
     return jsonify({
         "address": ', '.join(address.split("\n")).strip()
     })
