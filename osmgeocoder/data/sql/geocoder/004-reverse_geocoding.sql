@@ -46,10 +46,10 @@ $$
 	JOIN public.osm_struct_street s ON h.street_id = s.id
 	JOIN public.osm_struct_city c ON s.city_id = c.id
 	WHERE
-		ST_X(location) >= ST_X(point) - radius
-		AND ST_X(location) <= ST_X(point) + radius
-		AND ST_DWithin(location, point, radius) -- only search within radius
-	ORDER BY ST_Distance(location, point) -- order by distance to point
+		ST_X(h.geometry) >= ST_X(point) - radius
+		AND ST_X(h.geometry) <= ST_X(point) + radius
+		AND ST_DWithin(h.geometry, point, radius) -- only search within radius
+	ORDER BY ST_Distance(h.geometry, point) -- order by distance to point
 $$ LANGUAGE 'sql';
 
 -- SELECT * FROM point_to_address(ST_Transform(ST_SetSRID(ST_MakePoint(9.738889, 47.550535), 4326), 3857), 250) LIMIT 10;
