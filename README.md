@@ -298,6 +298,9 @@ def forward(self, address, country=None, center=None):
 def reverse(self, lat, lon, limit=10):
     pass
 
+def reverse_epsg3857(self, x, y, limit=10):
+    pass
+
 def predict_text(self, input):
     pass
 ```
@@ -326,6 +329,15 @@ This function is a generator which `yield`s the obtained results.
 Geocode a lat, lon location into a readable address:
 - `lat`: Latitude to code
 - `lon`: Longitute to code
+- `limit`: (optional) maximum number of results to return
+
+This function is a generator which `yield`s the obtained results.
+
+#### `reverse_epsg3857`
+
+Geocode a x, y location in EPGS 3857 projection (aka Web Mercator) into a readable address:
+- `x`: X coordinate
+- `y`: Y coordinate
 - `limit`: (optional) maximum number of results to return
 
 This function is a generator which `yield`s the obtained results.

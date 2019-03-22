@@ -57,7 +57,14 @@ class Geocoder():
 
     def reverse(self, lat, lon, limit=10):
         for radius in [25, 50, 100]:
-            items = fetch_address(self, (lat, lon), radius, limit=limit)
+            items = fetch_address(self, (lat, lon), radius, projection='epsg:4326', limit=limit)
+            for item in items:
+                if item is not None:
+                    yield self.formatter.format(item)
+
+    def reverse_epsg3857(self, x, y, limit=10):
+        for radius in [25, 50, 100]:
+            items = fetch_address(self, (x, y), radius, projection='epsg:3857', limit=limit)
             for item in items:
                 if item is not None:
                     yield self.formatter.format(item)
