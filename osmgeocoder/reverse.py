@@ -15,10 +15,10 @@ def fetch_address(geocoder, center, radius, projection='epsg:4326', limit=1):
     :param geocoder: the geocoder class instance
     :param center: center coordinate for which to fetch the address
     :param radius: query radius
+    :param projection: projection type of the coordinate, currently supported: ``epsg:4326`` and ``epsg:3857``
     :param limit: maximum number of results to return
     """
 
-    # calculate shard to query
     if projection == 'epsg:4326':
         mercProj = Proj(init='epsg:3857')
         x, y = mercProj(center[1], center[0])
@@ -26,7 +26,7 @@ def fetch_address(geocoder, center, radius, projection='epsg:4326', limit=1):
         x = center[0]
         y = center[1]
     else:
-        raise ValueError('Unkown projection {}'.format(projection))
+        raise ValueError('Unsupported projection {}'.format(projection))
 
     query = '''
         SELECT * FROM point_to_address_osm(

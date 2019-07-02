@@ -1,14 +1,14 @@
 -- copy table
 DROP TABLE IF EXISTS public.osm_struct_house;
-SELECT gen_random_uuid() AS id, osm_id, city, postcode, street, house_number, geometry INTO public.osm_struct_house FROM public.osm_house_number;
+SELECT crypto.gen_random_uuid() AS id, osm_id, city, postcode, street, house_number, geometry INTO public.osm_struct_house FROM public.osm_house_number;
 
 CREATE INDEX IF NOT EXISTS osm_buildings_house_number_idx ON public.osm_buildings USING BTREE(house_number);
 ANALYZE public.osm_buildings;
 
-EXPLAIN INSERT INTO public.osm_struct_house (id, osm_id, city, postcode, street, house_number, geometry)
-	SELECT gen_random_uuid() AS id, b.osm_id, '' AS city, p.postcode, b.street, b.house_number, ST_Centroid(b.geometry) AS geometry
+INSERT INTO public.osm_struct_house (id, osm_id, city, postcode, street, house_number, geometry)
+	SELECT crypto.gen_random_uuid() AS id, b.osm_id, '' AS city, p.postcode, b.street, b.house_number, gis.ST_Centroid(b.geometry) AS geometry
 	FROM (SELECT * FROM public.osm_buildings WHERE house_number <> '') b
-	JOIN public.osm_postal_code p ON ST_Intersects(p.geometry, b.geometry);
+	JOIN public.osm_postal_code p ON gis.ST_Intersects(p.geometry, b.geometry);
 
 CREATE INDEX osm_struct_house_city_idx ON public.osm_struct_house USING BTREE(city);
 CREATE INDEX osm_struct_house_postcode_idx ON public.osm_struct_house USING BTREE(postcode);
@@ -20,7 +20,7 @@ FROM public.osm_postal_code p
 WHERE
 	h.city = ''
 	AND h.postcode = ''
-	AND ST_Intersects(p.geometry, h.geometry);
+	AND gis.ST_Intersects(p.geometry, h.geometry);
 
 -- update postcode only entries
 UPDATE public.osm_struct_house h SET city = a.name
@@ -29,7 +29,7 @@ WHERE
 	h.city = ''
 	AND h.postcode <> ''
 	AND a.admin_level = 8
-	AND ST_Intersects(a.geometry, h.geometry);
+	AND gis.ST_Intersects(a.geometry, h.geometry);
 
 UPDATE public.osm_struct_house h SET city = a.name
 FROM public.osm_admin a
@@ -37,7 +37,7 @@ WHERE
 	h.city = ''
 	AND h.postcode <> ''
 	AND a.admin_level = 6
-	AND ST_Intersects(a.geometry, h.geometry);
+	AND gis.ST_Intersects(a.geometry, h.geometry);
 
 -- drop calculated tables
 DROP TABLE IF EXISTS public.osm_struct_streets;
@@ -45,10 +45,10 @@ DROP TABLE IF EXISTS public.osm_struct_cities;
 
 -- extract cities
 SELECT
-	gen_random_uuid() AS id,
+	crypto.gen_random_uuid() AS id,
 	city AS name,
 	postcode,
-	ST_SetSRID(ST_Extent(geometry), 3857) AS extent
+	gis.ST_SetSRID(gis.ST_Extent(geometry), 3857) AS extent
 INTO public.osm_struct_cities
 FROM public.osm_struct_house
 WHERE city <> '' OR postcode <> ''
@@ -74,10 +74,10 @@ CREATE INDEX osm_struct_house_city_id_idx ON public.osm_struct_house USING BTREE
 
 -- extract streets
 SELECT
-	gen_random_uuid() AS id,
+	crypto.gen_random_uuid() AS id,
 	street AS name,
 	city_id,
-	ST_SetSRID(ST_Extent(geometry), 3857) AS extent
+	gis.ST_SetSRID(gis.ST_Extent(geometry), 3857) AS extent
 INTO public.osm_struct_streets
 FROM public.osm_struct_house
 GROUP BY city_id, street;
@@ -106,7 +106,7 @@ UPDATE public.osm_struct_streets s SET geometry = r.geometry
 	FROM public.osm_roads r
 	WHERE
 		r.street = s.name
-		AND ST_Intersects(s.extent, ST_SetSRID(Box2D(r.geometry), 3857));
+		AND gis.ST_Intersects(s.extent, gis.ST_SetSRID(gis.Box2D(r.geometry), 3857));
 
 -- fetch geometry for city from osm_admin
 ALTER TABLE public.osm_struct_cities ADD COLUMN geometry gis.geometry(geometry, 3857);
@@ -116,7 +116,7 @@ UPDATE public.osm_struct_cities c SET geometry = p.geometry
 	WHERE
 		c.geometry IS NULL
 		AND p.postcode = c.postcode
-		AND ST_Intersects(c.extent, ST_SetSRID(Box2D(p.geometry), 3857));
+		AND gis.ST_Intersects(c.extent, gis.ST_SetSRID(gis.Box2D(p.geometry), 3857));
 
 UPDATE public.osm_struct_cities c SET geometry = a.geometry
 	FROM public.osm_admin a
@@ -124,7 +124,7 @@ UPDATE public.osm_struct_cities c SET geometry = a.geometry
 		c.geometry IS NULL
 		AND a.name = c.name
 		AND a.admin_level = 8
-		AND ST_Intersects(c.extent, ST_SetSRID(Box2D(a.geometry), 3857));
+		AND gis.ST_Intersects(c.extent, gis.ST_SetSRID(gis.Box2D(a.geometry), 3857));
 
 -- clean up
 ALTER TABLE public.osm_struct_house DROP COLUMN city, DROP COLUMN postcode, DROP COLUMN street, DROP COLUMN city_id;
@@ -132,7 +132,7 @@ ANALYZE public.osm_struct_cities;
 ANALYZE public.osm_struct_house;
 ANALYZE public.osm_struct_streets;
 
-CREATE INDEX osm_struct_house_geohash_idx ON public.osm_struct_house USING BTREE(ST_Geohash(ST_Transform(geometry, 4326)));
+CREATE INDEX osm_struct_house_geohash_idx ON public.osm_struct_house USING BTREE(gis.ST_Geohash(gis.ST_Transform(geometry, 4326)));
 CLUSTER public.osm_struct_house USING osm_struct_house_geohash_idx;
 
 CREATE INDEX osm_struct_house_geometry ON public.osm_struct_house USING GIST(geometry);

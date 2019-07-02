@@ -34,9 +34,9 @@ wget https://s3.amazonaws.com/data.openaddresses.io/runs/597854/ch/uri.zip
 wget https://s3.amazonaws.com/data.openaddresses.io/runs/597074/ch/zurich.zip
 
 # imposm binary
-wget https://github.com/omniscale/imposm3/releases/download/v0.6.0-alpha.4/imposm-0.6.0-alpha.4-linux-x86-64.tar.gz
-tar xvzf imposm-0.6.0-alpha.4-linux-x86-64.tar.gz
-export PATH="$PATH:/var/tmp/osm/imposm-0.6.0-alpha.4-linux-x86-64"
+wget https://github.com/omniscale/imposm3/releases/download/v0.8.1/imposm-0.8.1-linux-x86-64.tar.gz
+tar xvzf imposm-0.8.1-linux-x86-64.tar.gz
+export PATH="$PATH:/var/tmp/osm/imposm-0.8.1-linux-x86-64"
 
 # install python stuff
 python3 -m venv geocoder-env
@@ -58,11 +58,15 @@ ALTER DATABASE geocoder OWNER TO geocoder;
 \c geocoder
 CREATE SCHEMA gis; -- isolate postgis into its own schema for easier development
 ALTER SCHEMA gis OWNER TO geocoder;
-ALTER DATABASE geocoder SET search_path TO public, gis; -- set search path to include the gis schema
 CREATE EXTENSION postgis WITH SCHEMA gis; -- put postgis into gis schema
-CREATE EXTENSION pg_trgm; -- trigram search, used for forward geocoding
-CREATE EXTENSION pgcrypto; -- used to generate uuids
-CREATE EXTENSION fuzzystrmatch; -- metaphone seatch, used for text prediction
+CREATE SCHEMA str; -- isolate string functions into its own schema for easier development
+ALTER SCHEMA str OWNER TO geocoder;
+CREATE EXTENSION pg_trgm WITH SCHEMA str; -- trigram search, used for forward geocoding
+CREATE EXTENSION fuzzystrmatch WITH SCHEMA str; -- metaphone seatch, used for text prediction
+CREATE SCHEMA crypto; -- isolate string functions into its own schema for easier development
+ALTER SCHEMA crypto OWNER TO geocoder;
+CREATE EXTENSION pgcrypto WITH SCHEMA crypto; -- used to generate uuids
+ALTER DATABASE geocoder SET search_path TO public, gis, str, crypto; -- set search path to include the other schemas
 EOF
 
 # import openaddresses.io data
@@ -75,7 +79,4 @@ done
 ./bin/prepare_osm.py --db postgres://geocoder:$geocoder_password@localhost/geocoder --import-data $(dirname $(pwd))/europe-latest.osm.pbf --optimize --tmpdir $(dirname $(pwd))/imposm_tmp
 
 # run geocoder prepare scripts
-psql -U geocoder geocoder osmgeocoder/data/sql/001-wordlist_for_text_prediction.sql
-psql -U geocoder geocoder osmgeocoder/data/sql/002-text_prediction.sql
-psql -U geocoder geocoder osmgeocoder/data/sql/003-forward_geocoding.sql
-psql -U geocoder geocoder osmgeocoder/data/sql/004-reverse_geocoding.sql
+./bin/finalize_geocoder.py --db postgres://geocoder:$geocoder_password@localhost/geocoder

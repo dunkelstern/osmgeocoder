@@ -104,31 +104,6 @@ def imposm_import(db_url, data_file, tmp_dir, optimize):
     if temp is not None:
         temp.close()
 
-def dump(db_url, filename, threads):
-    print('Dumping database into directory {}...'.format(filename))
-    parsed = urlparse(db_url)
-    args = [
-        'pg_dump',
-        '-v',                    # verbose
-        '-F', 'd',               # directory type
-        '-j', str(threads),      # number of concurrent jobs
-        '-Z', '9',               # maximum compression
-        '-O',                    # no owners
-        '-x',                    # no privileges
-        '-f', filename,          # destination dir
-        '-h', parsed.hostname,
-    ]
-
-    if parsed.port is not None:
-        args.append('-p')
-        args.append(str(parsed.port))
-    if parsed.username is not None:
-        args.append('-U')
-        args.append(parsed.username)
-    args.append(parsed.path[1:])
-    print(" ".join(args))
-    #subprocess.run(args)
-
 #
 # Cmdline interface
 #
@@ -156,12 +131,6 @@ def parse_cmdline():
         help='Optimize DB Tables and create indices'
     )
     parser.add_argument(
-        '--dump',
-        type=str,
-        dest='dump_file',
-        help='Dump the converted data into a pg_dump file to be imported on another server'
-    )
-    parser.add_argument(
         '--tmpdir',
         type=str,
         dest='tmp',
@@ -181,5 +150,3 @@ if __name__ == '__main__':
     if args.optimize:
         optimize_db(db)
     close_db(db)
-    if args.dump_file:
-        dump(args.db_url, args.dump_file, 4)

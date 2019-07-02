@@ -19,7 +19,7 @@ def fetch_coordinate(geocoder, search_term, center=None, country=None, radius=20
     This is a generator that returns an iterator of dict instances with the following
     keys: house, road, house_number, postcode, city, country, location, trgm_dist, dist
 
-    No all keys have to be filled at all times.
+    Not all keys have to be filled at all times.
 
     :param geocoder: geocoder instance
     :param search_term: user input
@@ -38,6 +38,43 @@ def fetch_coordinate(geocoder, search_term, center=None, country=None, radius=20
                 parsed_address = { 'road': search_term }
         except ConnectionError:
             parsed_address = { 'road': search_term }
+
+    for result in fetch_coordinate_struct(
+            geocoder,
+            road=parsed_address.get('road', parsed_address.get('house', None)),
+            house_number=parsed_address.get('house_number', None),
+            postcode=parsed_address.get('postcode', None),
+            city=parsed_address.get('city', None),
+            country=country,
+            center=center,
+            radius=radius,
+            limit=limit
+        ):
+        yield result
+
+def fetch_coordinate_struct(geocoder, road=None, house_number=None, postcode=None, city=None, country=None, center=None, radius=20000, limit=20):
+    """
+    Fetch probable coordinates from openstreetmap or openaddresses.io data using
+    the structured search terms.
+
+    The results will be sorted by distance to center coordinate, if there is no center
+    coordinate the results will be sorted by trigram similarity.
+
+    This is a generator that returns an iterator of dict instances with the following
+    keys: house, road, house_number, postcode, city, country, location, trgm_dist, dist
+
+    Not all keys have to be filled at all times.
+
+    :param geocoder: geocoder instance
+    :param road: optional, user input
+    :param house_number: optional, user input
+    :param postcode: optional, user input
+    :param city: optional, user input
+    :param country: if set the query will be limited to this country
+    :param center: center coordinate used for distance sorting
+    :param radius: max search radius around the center coordinate
+    :param limit: maximum number of results to return
+    """
 
     query = '''
         SELECT * FROM geocode_{typ}(
@@ -60,7 +97,7 @@ def fetch_coordinate(geocoder, search_term, center=None, country=None, radius=20
 
     cursor = geocoder.db.cursor(cursor_factory=RealDictCursor)
 
-    for typ in ['osm']:
+    for typ in ['osm']:  # TODO: Implement for openaddresses.io
         q = query.format(typ=typ)
         cursor.execute(q, {
             'lat': center[0] if center is not None else None,
@@ -68,10 +105,10 @@ def fetch_coordinate(geocoder, search_term, center=None, country=None, radius=20
             'radius': radius,
             'limit': limit,
             'country': country,
-            'road': parsed_address.get('road', parsed_address.get('house', None)),
-            'house_number': parsed_address.get('house_number', None),
-            'postcode': parsed_address.get('postcode', None),
-            'city': parsed_address.get('city', None)
+            'road': road,
+            'house_number': house_number,
+            'postcode': postcode,
+            'city': city
         })
 
         if cursor.rowcount > 0:
