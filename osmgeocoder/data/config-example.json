@@ -2,14 +2,10 @@
   "db": {
     "dbname": "osm",
     "user": "osm",
-    "password": "password"
+    "password": "osm"
   },
-  "tables":{
-    "buildings": "osm_buildings",
-    "roads": "osm_roads",
-    "postcode": "osm_postal_code",
-    "admin": "osm_admin"
-  },
-  "postal_service_url": "http://localhost:3200/",
-  "postal_service_port": 3200
+  "postal": {
+    "service_url": "http://localhost:3200/",
+    "port": 3200
+  }
 }

@@ -24,7 +24,7 @@ class AddressFormatter():
             self.model = None
             try:
                 if resource_exists('osmgeocoder', 'worldwide.yml'):
-                    self.model = yaml.load(resource_stream('osmgeocoder', 'worldwide.yml'))
+                    self.model = yaml.load(resource_stream('osmgeocoder', 'worldwide.yml'), Loader=yaml.FullLoader)
             except ModuleNotFoundError:
                 pass
             
@@ -34,7 +34,7 @@ class AddressFormatter():
                 config = os.path.abspath(os.path.join(my_dir, 'data/worldwide.yml'))
 
                 with open(config, 'r') as fp:
-                    self.model = yaml.load(fp)
+                    self.model = yaml.load(fp, Loader=yaml.FullLoader)
 
     def format(self, address, country=None):
         search_key = country.upper() if country is not None else 'default'
