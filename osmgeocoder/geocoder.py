@@ -105,6 +105,7 @@ class Geocoder():
         :param limit: Maximum number of matches to return, defaults to 10
         :returns: iterator for addresses formatted to local merit (may contain linebreaks)
         """
+
         items = fetch_address(self, (lat, lon), radius, projection='epsg:4326', limit=limit)
         for item in items:
             if item is not None:
@@ -124,6 +125,7 @@ class Geocoder():
         :param limit: Maximum number of matches to return, defaults to 10
         :returns: iterator for addresses formatted to local merit (may contain linebreaks)
         """
+        
         items = fetch_address(self, (x, y), radius, projection='epsg:3857', limit=limit)
         for item in items:
             if item is not None:

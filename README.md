@@ -353,17 +353,17 @@ This function is a generator which `yield`s the obtained results.
 Geocode a lat, lon location into a readable address:
 - `lat`: Latitude to code
 - `lon`: Longitute to code
-- `radius`: Search radius
+- `radius`: Search radius in meters
 - `limit`: (optional) maximum number of results to return
 
 This function is a generator which `yield`s the obtained results.
 
 #### `reverse_epsg3857`
 
-Geocode a x, y Web Mercator location into a readable address:
-- `x`: x coordinate
-- `y`: y coordinate
-- `radius`: Search radius
+Geocode a x, y location in EPGS 3857 projection (aka Web Mercator) into a readable address:
+- `x`: X coordinate
+- `y`: Y coordinate
+- `radius`: Search radius in meters
 - `limit`: (optional) maximum number of results to return
 
 Use this function if you're using Web Mercator in your application internally to avoid constant re-projection between lat, lon and x, y.
