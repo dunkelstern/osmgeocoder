@@ -10,7 +10,11 @@ import subprocess
 import tempfile
 
 from time import time, sleep
-from urllib.parse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+
 from pkg_resources import resource_exists, resource_listdir, resource_string
 
 import psycopg2
@@ -35,8 +39,11 @@ def load_sql(db, path):
             sql_files = list(resource_listdir('osmgeocoder', path))
             sql_files.sort()
             for f in sql_files:
-                print('Executing {}...'.format(f))
+                print('Executing {}... '.format(os.path.basename(f)), end='', flush=True)
+                start = time()
                 db.execute(resource_string('osmgeocoder', os.path.join(path, f)))
+                end = time()
+                print('{} s'.format(round(end-start, 2)), flush=True)
     except ImportError:
         # if not found, assume we have been started from a source checkout
         my_dir = os.path.dirname(os.path.abspath(__file__))
@@ -45,16 +52,22 @@ def load_sql(db, path):
         sql_files.sort()
 
         for f in sql_files:
-            print('Executing {}...'.format(f))
+            print('Executing {}... '.format(os.path.basename(f)), end='', flush=True)
+            start = time()
             with open(f, 'r') as fp:
                 db.execute(fp.read())
+            end = time()
+            print('{} s'.format(round(end-start, 2)), flush=True)
 
 
 def prepare_db(db):
     load_sql(db, 'data/sql/prepare')
 
 def optimize_db(db):
+    start = time()
     load_sql(db, 'data/sql/optimize')
+    end = time()
+    print('Optimizing took {} s'.format(round(end - start, 2)))
 
 def close_db(db):
     conn = db.connection

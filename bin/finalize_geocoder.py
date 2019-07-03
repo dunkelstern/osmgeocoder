@@ -10,7 +10,10 @@ import subprocess
 import tempfile
 
 from time import time, sleep
-from urllib.parse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 from pkg_resources import resource_exists, resource_listdir, resource_string
 
 import psycopg2
