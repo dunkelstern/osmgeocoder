@@ -31,6 +31,17 @@ See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) 
 - Restored compatability with older PostgreSQL DB versions (9.5+ if you do no use openaddresses.io)
 - Switched to `pipenv`
 
+### v2.0.1
+
+- Fix missing import for structured forward geocoding
+- Fix Copy and Paste error in forward geocoding SQL
+
+If you're coming from `2.0.0`, re-run the finalize step to update the SQL functions:
+
+```bash
+$ pipenv run bin/finalize_geocoder.py --db postgresql://geocoder:password@localhost/osmgeocoder
+```
+
 ## TODO
 
 - Return Attribution in API and in webservices

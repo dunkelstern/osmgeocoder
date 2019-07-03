@@ -6,22 +6,22 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
         name='osmgeocoder',
-        version='2.0.0',
+        version='2.0.1',
         description='OpenStreetMap and OpenAddresses.io based geocoder',
         long_description='''
-            Python implementation for a OSM / Openaddresses.io Geocoder.
+Python implementation for a OSM / Openaddresses.io Geocoder.
 
-            This geocoder is implemented in PostgreSQL DB functions as much as possible, there is a simple API and an example flask app included.
+This geocoder is implemented in PostgreSQL DB functions as much as possible, there is a simple API and an example flask app included.
 
-            You will need PostgreSQL 9.5+ (or 11.0+ for Openaddresses.io) with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
+You will need PostgreSQL 9.5+ (or 11.0+ for Openaddresses.io) with PostGIS installed as well as some disk space and data-files from OpenStreetMap and (optionally) OpenAddresses.io.
 
-            Data import will be done via [Omniscale's imposm3](https://github.com/omniscale/imposm3) and a supplied python script to import the openaddresses.io data.
+Data import will be done via [Omniscale's imposm3](https://github.com/omniscale/imposm3) and a supplied python script to import the openaddresses.io data.
 
-            Optionally you can use the [libpostal machine learning address classifier](https://github.com/openvenues/libpostal) to parse addresses supplied as input to the forward geocoder.
+Optionally you can use the [libpostal machine learning address classifier](https://github.com/openvenues/libpostal) to parse addresses supplied as input to the forward geocoder.
 
-            For formatting the addresses from the reverse geocoder the `worldwide.yml` from [OpenCageData address-formatting repository](https://github.com/OpenCageData/address-formatting) is used to format the address according to customs in the country that is been encoded.
+For formatting the addresses from the reverse geocoder the `worldwide.yml` from [OpenCageData address-formatting repository](https://github.com/OpenCageData/address-formatting) is used to format the address according to customs in the country that is been encoded.
 
-            See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) for more information.
+See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) for more information.
         ''',
         long_description_content_type='text/markdown',
         url='https://github.com/dunkelstern/osmgeocoder',
