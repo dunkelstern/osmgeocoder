@@ -14,11 +14,30 @@ For formatting the addresses from the reverse geocoder the `worldwide.yml` from 
 
 See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) for more information.
 
+## Changelog
+
+### v1.0
+
+- Initial release, reverse geocoding works, forward geocoding is slow
+
+### v2.0
+
+**Warning:** DB Format changed, you'll have to re-import data
+
+- Fixed forward geocoding speed
+- Fixed import scripts to be more resilient
+- Made Openaddresses.io completely optional
+- Restored compatability with older 3.x python versions
+- Restored compatability with older PostgreSQL DB versions (9.5+ if you do no use openaddresses.io)
+- Switched to `pipenv`
+
 ## TODO
 
 - Return Attribution in API and in webservices
 
 ## "Quick" and dirty how-to
+
+**Statistics uutdated, will be updated shortly**
 
 Just for your information, this process takes a lot of time for a big import. Example figures on a machine with a Core i7-7700K on 4.2 GHz with a Samsung (SATA-)SSD and 32GB of RAM (and some tuned buffer sizes for Postgres):
 
@@ -68,13 +87,13 @@ pipenv sync
 6. See below for importing openaddresses.io data if needed (this is completely optional)
 7. Import some OpenStreetMap data into the DB (grab a coffee or two):
 ```bash
-$ bin/prepare_osm.py --db postgresql://user:password@localhost/osmgeocoder --import-data osm.pbf --optimize
+$ bin/prepare_osm.py --db postgresql://geocoder:password@localhost/osmgeocoder --import-data osm.pbf --optimize
 ```
 8. Modify configuration file to match your setup. The example config is in `osmgeocoder/data/config-example.json`.
 9. Optionally install and start the postal machine learning address categorizer (see below)
 10. Import the geocoding functions into the DB:
 ```bash
-$ bin/finalize_geocoder.py --db postgresql://user:password@localhost/osmgeocoder
+$ bin/finalize_geocoder.py --db postgresql://geocoder:password@localhost/osmgeocoder
 ```
 11. Geocode:
 ```bash
@@ -102,7 +121,7 @@ The import is relatively slow as the data is contained in a big bunch of zipped 
 ```bash
 wget https://s3.amazonaws.com/data.openaddresses.io/openaddr-collected-europe.zip # download openaddress.io data
 pipenv run bin/import_openaddress_data.py \ # run an import
-    --db postgresql://user:password@host/dbname \
+    --db postgresql://geocoder:password@host/osmgeocoder \
     --threads 4 \
     --optimize \
     openaddr-collected-europe.zip
@@ -187,9 +206,8 @@ The file `geocoder_service.py` is a simple Flask app to present the geocoder as 
 ### Installation
 
 ```bash
-pipenv shell
-pip install gunicorn
-pip install flask
+pipenv run pip install gunicorn
+pipenv run pip install flask
 ```
 
 You will need a working config file too.

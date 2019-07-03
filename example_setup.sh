@@ -53,9 +53,9 @@ pip install -r requirements.txt
 # create geocoding db
 psql <<EOF
 CREATE ROLE geocoder WITH LOGIN PASSWORD '$geocoder_password';
-CREATE DATABASE geocoder;
-ALTER DATABASE geocoder OWNER TO geocoder;
-\c geocoder
+CREATE DATABASE osmgeocoder;
+ALTER DATABASE osmgeocoder OWNER TO geocoder;
+\c osmgeocoder
 CREATE SCHEMA gis; -- isolate postgis into its own schema for easier development
 ALTER SCHEMA gis OWNER TO geocoder;
 CREATE EXTENSION postgis WITH SCHEMA gis; -- put postgis into gis schema
@@ -71,12 +71,12 @@ EOF
 
 # import openaddresses.io data
 for item in ../*.zip ; do
-    ./bin/import_openaddress_data.py --db postgres://geocoder:$geocoder_password@localhost/geocoder --threads 8 --fast $(realpath $item)
+    ./bin/import_openaddress_data.py --db postgres://geocoder:$geocoder_password@localhost/osmgeocoder --threads 8 --fast $(realpath $item)
 done
-./bin/import_openaddress_data.py --db postgres://geocoder:$geocoder_password@localhost/geocoder --threads 8 --optimize
+./bin/import_openaddress_data.py --db postgres://geocoder:$geocoder_password@localhost/osmgeocoder --threads 8 --optimize
 
 # import osm data
-./bin/prepare_osm.py --db postgres://geocoder:$geocoder_password@localhost/geocoder --import-data $(dirname $(pwd))/europe-latest.osm.pbf --optimize --tmpdir $(dirname $(pwd))/imposm_tmp
+./bin/prepare_osm.py --db postgres://geocoder:$geocoder_password@localhost/osmgeocoder --import-data $(dirname $(pwd))/europe-latest.osm.pbf --optimize --tmpdir $(dirname $(pwd))/imposm_tmp
 
 # run geocoder prepare scripts
-./bin/finalize_geocoder.py --db postgres://geocoder:$geocoder_password@localhost/geocoder
+./bin/finalize_geocoder.py --db postgres://geocoder:$geocoder_password@localhost/osmgeocoder

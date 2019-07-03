@@ -35,7 +35,6 @@ setup(
             'License :: OSI Approved :: BSD License',
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
@@ -53,11 +52,11 @@ setup(
             'bin/finalize_geocoder.py'
         ],
         install_requires=[
-            'psycopg2-binary >= 2.7',
+            'psycopg2-binary >= 2.8',
             'pyproj >= 1.9',
             'Shapely >= 1.6',
             'requests >= 2.18',
-            'PyYAML >= 3.12',
+            'PyYAML >= 5.0',
             'pystache >= 0.5',
             'python-geohash >= 0.8.5'
         ],
