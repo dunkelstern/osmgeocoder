@@ -101,7 +101,7 @@ BEGIN
     JOIN public.osm_struct_house h ON h.street_id = s.id
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
-        AND gis.ST_Within(gis.ST_Centroid(b.geometry), country_poly) -- intersect with country polygon
+        AND gis.ST_Within(gis.ST_Centroid(h.geometry), country_poly) -- intersect with country polygon
         AND s.name % search_term
         AND (search_housenumber IS NULL OR h.house_number % search_housenumber)
     ORDER BY
@@ -241,7 +241,7 @@ BEGIN
     JOIN public.osm_struct_house h ON h.street_id = s.id
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
-        AND gis.ST_Within(gis.ST_Centroid(b.geometry), country_poly) -- intersect with country polygon
+        AND gis.ST_Within(gis.ST_Centroid(h.geometry), country_poly) -- intersect with country polygon
         AND c.name % search_city
         AND s.name % search_term
         AND (search_housenumber IS NULL OR h.house_number % search_housenumber)
@@ -378,7 +378,7 @@ BEGIN
     JOIN public.osm_struct_house h ON h.street_id = s.id
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
-        AND gis.ST_Within(gis.ST_Centroid(b.geometry), country_poly) -- intersect with country polygon
+        AND gis.ST_Within(gis.ST_Centroid(h.geometry), country_poly) -- intersect with country polygon
         AND s.name % search_term
         AND c.postcode % search_postcode
         AND (search_housenumber IS NULL OR h.house_number % search_housenumber)
