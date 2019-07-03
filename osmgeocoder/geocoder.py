@@ -6,7 +6,7 @@ from pyproj import Proj, transform
 
 from .format import AddressFormatter
 from .reverse import fetch_address
-from .forward import fetch_coordinate
+from .forward import fetch_coordinate, fetch_coordinate_struct
 
 
 class Geocoder():
@@ -78,7 +78,7 @@ class Geocoder():
         latlonProj = Proj(init='epsg:4326')
 
         results = []
-        for coordinate in fetch_coordinate_structured(
+        for coordinate in fetch_coordinate_struct(
             self, road=road, house_number=house_number,
             postcode=postcode, city=city, country=country,
             center=center):
