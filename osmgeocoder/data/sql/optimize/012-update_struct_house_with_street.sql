@@ -1,3 +1,5 @@
+ALTER TABLE public.osm_struct_house ADD COLUMN street_id uuid REFERENCES public.osm_struct_streets (id);
+
 UPDATE public.osm_struct_house h
 	SET street_id = s.id
 	FROM public.osm_struct_streets s

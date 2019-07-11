@@ -32,13 +32,17 @@ def open_db(url, cursor_name=None):
         cursor = conn.cursor(name=cursor_name)
     return cursor
 
-def load_sql(db, path):
+def load_sql(db, path, stop_at=None, start_at=None):
     try:
         # assume we are in a virtualenv first
         if resource_exists('osmgeocoder', path):
             sql_files = list(resource_listdir('osmgeocoder', path))
             sql_files.sort()
             for f in sql_files:
+                if int(os.path.basename(f)[:3]) == stop_at:
+                    break
+                if start_at is not None and int(os.path.basename(f)[:3]) < start_at:
+                    continue
                 print('Executing {}... '.format(os.path.basename(f)), end='', flush=True)
                 start = time()
                 db.execute(resource_string('osmgeocoder', os.path.join(path, f)))
@@ -52,6 +56,10 @@ def load_sql(db, path):
         sql_files.sort()
 
         for f in sql_files:
+            if int(os.path.basename(f)[:3]) == stop_at:
+                break
+            if start_at is not None and int(os.path.basename(f)[:3]) < start_at:
+                continue
             print('Executing {}... '.format(os.path.basename(f)), end='', flush=True)
             start = time()
             with open(f, 'r') as fp:
@@ -63,9 +71,9 @@ def load_sql(db, path):
 def prepare_db(db):
     load_sql(db, 'data/sql/prepare')
 
-def optimize_db(db):
+def optimize_db(db, stop_at=None, start_at=None):
     start = time()
-    load_sql(db, 'data/sql/optimize')
+    load_sql(db, 'data/sql/optimize', stop_at=stop_at, start_at=start_at)
     end = time()
     print('Optimizing took {} s'.format(round(end - start, 2)))
 
@@ -144,6 +152,20 @@ def parse_cmdline():
         help='Optimize DB Tables and create indices'
     )
     parser.add_argument(
+        '--debug-optimize-to',
+        dest='debug_to',
+        type=int,
+        default=None,
+        help='Stop optimize before step x'
+    )
+    parser.add_argument(
+        '--debug-optimize-from',
+        dest='debug_from',
+        type=int,
+        default=None,
+        help='Start optimize at step x'
+    )
+    parser.add_argument(
         '--tmpdir',
         type=str,
         dest='tmp',
@@ -161,5 +183,5 @@ if __name__ == '__main__':
     if args.data_file is not None:
         imposm_import(args.db_url, args.data_file, args.tmp, args.optimize)
     if args.optimize:
-        optimize_db(db)
+        optimize_db(db, stop_at=args.debug_to, start_at=args.debug_from)
     close_db(db)
