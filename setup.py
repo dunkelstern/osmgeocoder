@@ -52,7 +52,7 @@ See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) 
             'bin/finalize_geocoder.py'
         ],
         install_requires=[
-            'psycopg2-binary >= 2.8',
+            'psycopg2 >= 2.8',
             'pyproj >= 1.9',
             'Shapely >= 1.6',
             'requests >= 2.18',
