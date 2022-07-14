@@ -1,9 +1,17 @@
+from typing import Tuple, Generator, Dict, Any
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from pyproj import Proj
 from time import time
 
-def fetch_address(geocoder, center, radius, projection='epsg:4326', limit=1):
+def fetch_address(
+    geocoder,
+    center:Tuple[float, float],
+    radius:float,
+    projection='epsg:4326',
+    limit=1
+) -> Generator[Dict[str, Any], None, None]:
     """
     Fetch address by searching osm and openaddresses.io data.
 

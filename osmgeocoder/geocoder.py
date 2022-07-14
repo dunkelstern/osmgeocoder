@@ -1,4 +1,5 @@
-import os
+from typing import Dict, List, Tuple, Any, Generator, Optional
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from shapely.wkb import loads
@@ -11,7 +12,12 @@ from .forward import fetch_coordinate, fetch_coordinate_struct
 
 class Geocoder():
 
-    def __init__(self, db=None, db_handle=None, address_formatter_config=None, postal=None):
+    def __init__(self,
+        db:Optional[Dict[str, Any]]=None,
+        db_handle:Optional[psycopg2.connection]=None,
+        address_formatter_config:Optional[str]=None,
+        postal:Optional[Dict[str, Any]]=None
+    ):
         """
         Initialize a new geocoder
 
@@ -29,7 +35,7 @@ class Geocoder():
             self.db = db_handle
         self.formatter = AddressFormatter(config=address_formatter_config)
 
-    def _init_db(self, db_config):
+    def _init_db(self, db_config:Dict[str, Any]) -> psycopg2.connection:
         connstring = []
         for key, value in db_config.items():
             connstring.append("{}={}".format(key, value))
@@ -37,14 +43,20 @@ class Geocoder():
 
         return connection
 
-    def forward(self, address, country=None, center=None):
+    def forward(
+        self,
+        address:str,
+        country:Optional[str]=None,
+        center:Optional[Tuple[float, float]]=None
+    ) -> List[Tuple[str, float, float]]:
         """
-        Forward geocode address (string -> coordinate tuple) from search string
+        Forward geocode address (string -> coordinate tuple) from search string and return formatted address
 
         :param address: Address to fetch a point for, if you're not running the postal classifier the search
                         will be limited to a street name
         :param country: optional, country name to search in (native language, e.g. "Deutschland" or "France")
         :param center: optional, center coordinate (EPSG 4326/WGS84 (lat, lon) tuple) to sort result by distance
+        :returns: List of Tuples of Name, Latitude, Longitude
         """
         mercProj = Proj(init='epsg:3857')
         latlonProj = Proj(init='epsg:4326')
@@ -131,12 +143,12 @@ class Geocoder():
             if item is not None:
                 yield self.formatter.format(item)
 
-    def predict_text(self, input):
+    def predict_text(self, input:str) -> Generator[str, None, None]:
         """
         Predict word the user is typing currently
 
         :param input: user input
-        :returns: iterator for word list, sorted by most common
+        :returns: generator for word list, sorted by most common
         """
         query = 'SELECT word FROM predict_text(%s)'
 

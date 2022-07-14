@@ -1,3 +1,5 @@
+from typing import Optional
+
 import yaml
 import pystache
 import os
@@ -15,7 +17,7 @@ def first(address):
 
 class AddressFormatter():
 
-    def __init__(self, config=None):
+    def __init__(self, config:Optional[str]=None):
         # if no opencage data file is specified in the configuration
         # we fall back to the one included with this package
         if config is None:
@@ -36,7 +38,7 @@ class AddressFormatter():
                 with open(config, 'r') as fp:
                     self.model = yaml.load(fp, Loader=yaml.FullLoader)
 
-    def format(self, address, country=None):
+    def format(self, address:str, country:Optional[str]=None) -> str:
         search_key = country.upper() if country is not None else 'default'
         fmt = self.model.get(search_key, None)
         if fmt is None:

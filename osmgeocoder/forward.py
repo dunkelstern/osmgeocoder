@@ -1,3 +1,5 @@
+from typing import Optional, Generator, Tuple, Dict, Any
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -5,7 +7,14 @@ from requests import post
 from requests.exceptions import ConnectionError
 
 
-def fetch_coordinate(geocoder, search_term, center=None, country=None, radius=20000, limit=20):
+def fetch_coordinate(
+    geocoder,
+    search_term: str,
+    center:Optional[Tuple[float, float]]=None,
+    country:Optional[str]=None,
+    radius=20000,
+    limit=20
+) -> Generator[Dict[str, Any], None, None]:
     """
     Fetch probable coordinates from openstreetmap or openaddresses.io data using
     the search term.
@@ -52,7 +61,17 @@ def fetch_coordinate(geocoder, search_term, center=None, country=None, radius=20
         ):
         yield result
 
-def fetch_coordinate_struct(geocoder, road=None, house_number=None, postcode=None, city=None, country=None, center=None, radius=20000, limit=20):
+def fetch_coordinate_struct(
+    geocoder,
+    road:Optional[str]=None,
+    house_number:Optional[str]=None,
+    postcode:Optional[str]=None,
+    city:Optional[str]=None,
+    country:Optional[str]=None,
+    center:Optional[Tuple[float, float]]=None,
+    radius=20000,
+    limit=20
+) -> Generator[Dict[str, Any], None, None]:
     """
     Fetch probable coordinates from openstreetmap or openaddresses.io data using
     the structured search terms.
