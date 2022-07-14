@@ -37,6 +37,9 @@ class AddressFormatter():
 
                 with open(config, 'r') as fp:
                     self.model = yaml.load(fp, Loader=yaml.FullLoader)
+        else:
+            with open(config, 'r') as fp:
+                self.model = yaml.load(fp, Loader=yaml.FullLoader)
 
     def format(self, address:str, country:Optional[str]=None) -> str:
         search_key = country.upper() if country is not None else 'default'
