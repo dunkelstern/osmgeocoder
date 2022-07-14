@@ -12,6 +12,8 @@ BEGIN
 			house_number text,
 			postcode text,
 			city text,
+			county text,
+			"state" text,
 			location gis.geometry(point, 3857),
 			distance float,
 			license_id uuid

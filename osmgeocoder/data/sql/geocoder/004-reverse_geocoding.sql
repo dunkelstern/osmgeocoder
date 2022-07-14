@@ -33,6 +33,8 @@ BEGIN
 				h.housenumber as house_number,
 				c.postcode,
 				c.city,
+				NULL as county,
+				NULL as "state",
 				location,
 				gis.ST_Distance(location, point) as distance,
 				c.license_id
@@ -69,12 +71,16 @@ BEGIN
 				h.house_number,
 				c.postcode,
 				c.name as city,
+        		NULLIF(a6.name, '')::text as county,
+        		NULLIF(a4.name, '')::text as "state",
 				h.geometry as location,
 				gis.ST_Distance(h.geometry, point) as distance,
 				'00000000-0000-0000-0000-000000000000'::uuid as license_id
 			FROM public.osm_struct_house h
 			JOIN public.osm_struct_streets s ON h.street_id = s.id
 			JOIN public.osm_struct_cities c ON s.city_id = c.id
+		    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    		LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
 			WHERE
 				gis.ST_X(h.geometry) >= gis.ST_X(point) - radius
 				AND gis.ST_X(h.geometry) <= gis.ST_X(point) + radius

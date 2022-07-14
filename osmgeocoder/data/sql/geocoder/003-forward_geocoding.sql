@@ -41,6 +41,8 @@ AS $$
         h.house_number::text,
         c.postcode::text,
         NULLIF(c.name, '')::text as city,
+        NULLIF(a6.name, '')::text as county,
+        NULLIF(a4.name, '')::text as "state",
         h.geometry::gis.geometry(point, 3857),
         gis.ST_Distance(h.geometry, center) as distance,
         '00000000-0000-0000-0000-000000000000'::uuid as license_id
@@ -48,6 +50,8 @@ AS $$
         public.osm_struct_streets s
     JOIN public.osm_struct_cities c ON s.city_id = c.id
     JOIN public.osm_struct_house h ON h.street_id = s.id
+    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
         AND s.name % search_term
@@ -92,6 +96,8 @@ BEGIN
         h.house_number::text,
         c.postcode::text,
         NULLIF(c.name, '')::text as city,
+        NULLIF(a6.name, '')::text as county,
+        NULLIF(a4.name, '')::text as "state",
         h.geometry::gis.geometry(point, 3857),
         gis.ST_Distance(h.geometry, center) as distance,
         '00000000-0000-0000-0000-000000000000'::uuid as license_id
@@ -99,6 +105,8 @@ BEGIN
         public.osm_struct_streets s
     JOIN public.osm_struct_cities c ON s.city_id = c.id
     JOIN public.osm_struct_house h ON h.street_id = s.id
+    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
         AND gis.ST_Within(gis.ST_Centroid(h.geometry), country_poly) -- intersect with country polygon
@@ -177,6 +185,8 @@ $$
         h.house_number::text,
         c.postcode::text,
         NULLIF(c.name, '')::text as city,
+        NULLIF(a6.name, '')::text as county,
+        NULLIF(a4.name, '')::text as "state",
         h.geometry::gis.geometry(point, 3857),
         gis.ST_Distance(h.geometry, center) as distance,
         '00000000-0000-0000-0000-000000000000'::uuid as license_id
@@ -184,6 +194,8 @@ $$
         public.osm_struct_streets s
     JOIN public.osm_struct_cities c ON s.city_id = c.id
     JOIN public.osm_struct_house h ON h.street_id = s.id
+    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
         AND c.name % search_city
@@ -232,6 +244,8 @@ BEGIN
         h.house_number::text,
         c.postcode::text,
         NULLIF(c.name, '')::text as city,
+        NULLIF(a6.name, '')::text as county,
+        NULLIF(a4.name, '')::text as "state",
         h.geometry::gis.geometry(point, 3857),
         gis.ST_Distance(h.geometry, center) as distance,
         '00000000-0000-0000-0000-000000000000'::uuid as license_id
@@ -239,6 +253,8 @@ BEGIN
         public.osm_struct_streets s
     JOIN public.osm_struct_cities c ON s.city_id = c.id
     JOIN public.osm_struct_house h ON h.street_id = s.id
+    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
         AND gis.ST_Within(gis.ST_Centroid(h.geometry), country_poly) -- intersect with country polygon
@@ -314,6 +330,8 @@ $$
         h.house_number::text,
         c.postcode::text,
         NULLIF(c.name, '')::text as city,
+        NULLIF(a6.name, '')::text as county,
+        NULLIF(a4.name, '')::text as "state",
         h.geometry::gis.geometry(point, 3857),
         gis.ST_Distance(h.geometry, center) as distance,
         '00000000-0000-0000-0000-000000000000'::uuid as license_id
@@ -321,6 +339,8 @@ $$
         public.osm_struct_streets s
     JOIN public.osm_struct_cities c ON s.city_id = c.id
     JOIN public.osm_struct_house h ON h.street_id = s.id
+    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
         AND s.name % search_term
@@ -369,6 +389,8 @@ BEGIN
         h.house_number::text,
         c.postcode::text,
         NULLIF(c.name, '')::text as city,
+        NULLIF(a6.name, '')::text as county,
+        NULLIF(a4.name, '')::text as "state",
         h.geometry::gis.geometry(point, 3857),
         gis.ST_Distance(h.geometry, center) as distance,
         '00000000-0000-0000-0000-000000000000'::uuid as license_id
@@ -376,6 +398,8 @@ BEGIN
         public.osm_struct_streets s
     JOIN public.osm_struct_cities c ON s.city_id = c.id
     JOIN public.osm_struct_house h ON h.street_id = s.id
+    LEFT JOIN public.osm_admin a4 ON gis.ST_Contains(a4.geometry, h.geometry::gis.geometry(point, 3857)) and a4.admin_level = 4
+    LEFT JOIN public.osm_admin a6 ON gis.ST_Contains(a6.geometry, h.geometry::gis.geometry(point, 3857)) and a6.admin_level = 6
     WHERE
         (center IS NULL OR gis.ST_DWithin(h.geometry, center, radius)) -- only search around center if center is not null
         AND gis.ST_Within(gis.ST_Centroid(h.geometry), country_poly) -- intersect with country polygon
