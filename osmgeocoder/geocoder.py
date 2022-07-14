@@ -74,10 +74,18 @@ class Geocoder():
             ))
 
         return results
-    
-    def forward_structured(self, road=None, house_number=None, postcode=None, city=None, country=None, center=None):
+
+    def forward_structured_dict(
+        self,
+        road:Optional[str]=None,
+        house_number:Optional[str]=None,
+        postcode:Optional[str]=None,
+        city:Optional[str]=None,
+        country:Optional[str]=None,
+        center:Optional[Tuple[float, float]]=None
+    ) -> List[Dict[str, Any]]:
         """
-        Forward geocode address (strings -> coordinate tuple) from structured data
+        Forward geocode address (strings -> coordinate tuple) from structured data and return dictionary
 
         :param road: Street or road name if known
         :param house_number: House number (string!) if known
@@ -85,6 +93,7 @@ class Geocoder():
         :param city: City name if known
         :param country: optional, country name to search in (native language, e.g. "Deutschland" or "France")
         :param center: optional, center coordinate (EPSG 4326/WGS84 (lat, lon) tuple) to sort result by distance
+        :returns: List of Dictionaries with at least 'lat' and 'lon' members
         """
         mercProj = Proj(init='epsg:3857')
         latlonProj = Proj(init='epsg:4326')
@@ -97,17 +106,83 @@ class Geocoder():
             
             p = loads(coordinate['location'], hex=True)
 
-            name = self.formatter.format(coordinate)
-
             # project location back to lat/lon
             lon, lat = transform(mercProj, latlonProj, p.x, p.y)
+            coordinate['lat'] = lat
+            coordinate['lon'] = lon
+
+            results.append(coordinate)
+
+        return results
+
+    def forward_structured(
+        self,
+        road:Optional[str]=None,
+        house_number:Optional[str]=None,
+        postcode:Optional[str]=None,
+        city:Optional[str]=None,
+        country:Optional[str]=None,
+        center:Optional[Tuple[float, float]]=None
+    ) -> List[Tuple[str, float, float]]:
+        """
+        Forward geocode address (strings -> coordinate tuple) from structured data and return formatted address
+
+        :param road: Street or road name if known
+        :param house_number: House number (string!) if known
+        :param postcode: Postcode (string!) if known
+        :param city: City name if known
+        :param country: optional, country name to search in (native language, e.g. "Deutschland" or "France")
+        :param center: optional, center coordinate (EPSG 4326/WGS84 (lat, lon) tuple) to sort result by distance
+        :returns: List of Tuples of Name, Latitude, Longitude
+        """
+        data = self.forward_structured_dict(
+            road=road,
+            house_number=house_number
+            postcode=postcode,
+            city=city,
+            country=country,
+            center=center
+        )
+
+        results = []
+        for coordinate in data:
+            name = self.formatter.format(coordinate)
+
             results.append((
-                name, lat, lon
+                name, coordinate['lat'], coordinate['lon']
             ))
 
         return results
 
-    def reverse(self, lat, lon, radius=100, limit=10):
+    def reverse_dict(
+        self,
+        lat:float,
+        lon:float,
+        radius=100,
+        limit=10
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Reverse geocode coordinate to address dictionary
+
+        :param lat: Latitude (EPSG 4326/WGS 84)
+        :param lon: Longitude (EPSG 4326/WGS 84)
+        :param radius: Search radius
+        :param limit: Maximum number of matches to return, defaults to 10
+        :returns: generator for addresses formatted to local merit (may contain linebreaks)
+        """
+
+        items = fetch_address(self, (lat, lon), radius, projection='epsg:4326', limit=limit)
+        for item in items:
+            if item is not None:
+                yield item
+
+    def reverse(
+        self,
+        lat:float,
+        lon:float,
+        radius=100,
+        limit=10
+    ) -> Generator[str, None, None]:
         """
         Reverse geocode coordinate to address string
 
@@ -115,15 +190,19 @@ class Geocoder():
         :param lon: Longitude (EPSG 4326/WGS 84)
         :param radius: Search radius
         :param limit: Maximum number of matches to return, defaults to 10
-        :returns: iterator for addresses formatted to local merit (may contain linebreaks)
+        :returns: generator for addresses formatted to local merit (may contain linebreaks)
         """
-
-        items = fetch_address(self, (lat, lon), radius, projection='epsg:4326', limit=limit)
+        items = self.reverse_dict(lat, lon, radius=radius, limit=limit)
         for item in items:
-            if item is not None:
-                yield self.formatter.format(item)
+            yield self.formatter.format(item)
 
-    def reverse_epsg3857(self, x, y, radius=100, limit=10):
+    def reverse_epsg3857_dict(
+        self,
+        x:float,
+        y:float,
+        radius=100,
+        limit=10
+    ) -> Generator[Dict[str, Any], None, None]:
         """
         Reverse geocode coordinate to address string
         this one uses the EPSG 3857 aka. Web Mercator projection which is the format
@@ -135,13 +214,37 @@ class Geocoder():
         :param y: Y (EPSG 3857/Web Mercator)
         :param radius: Search radius
         :param limit: Maximum number of matches to return, defaults to 10
-        :returns: iterator for addresses formatted to local merit (may contain linebreaks)
+        :returns: generator for addresses formatted to local merit (may contain linebreaks)
         """
         
         items = fetch_address(self, (x, y), radius, projection='epsg:3857', limit=limit)
         for item in items:
             if item is not None:
-                yield self.formatter.format(item)
+                yield item
+
+    def reverse_epsg3857(
+        self,
+        x:float,
+        y:float,
+        radius=100,
+        limit=10
+    ) -> Generator[str, None, None]:
+        """
+        Reverse geocode coordinate to address string
+        this one uses the EPSG 3857 aka. Web Mercator projection which is the format
+        that is used in the DB already, so by using this function we avoid to re-project
+        from and into this projection all the time if we're working with web mercator
+        internally. 
+
+        :param x: X (EPSG 3857/Web Mercator)
+        :param y: Y (EPSG 3857/Web Mercator)
+        :param radius: Search radius
+        :param limit: Maximum number of matches to return, defaults to 10
+        :returns: generator for addresses formatted to local merit (may contain linebreaks)
+        """
+        items = self.reverse_epsg3857_dict(x, y, radius=radius, limit=limit)
+        for item in items:
+            yield self.formatter.format(item)
 
     def predict_text(self, input:str) -> Generator[str, None, None]:
         """
