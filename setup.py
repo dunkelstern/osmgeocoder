@@ -6,7 +6,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
         name='osmgeocoder',
-        version='2.0.1',
+        version='2.1.0',
         description='OpenStreetMap and OpenAddresses.io based geocoder',
         long_description='''
 Python implementation for a OSM / Openaddresses.io Geocoder.
@@ -35,9 +35,10 @@ See `README.md` in the [repository](https://github.com/dunkelstern/osmgeocoder) 
             'License :: OSI Approved :: BSD License',
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
+            'Programming Language :: Python :: 3.10',
             'Operating System :: OS Independent'
         ],
         keywords='osm openstreetmap geocoding geocoder openaddresses.io',

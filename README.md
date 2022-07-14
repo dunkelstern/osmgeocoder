@@ -42,6 +42,13 @@ If you're coming from `2.0.0`, re-run the finalize step to update the SQL functi
 $ pipenv run bin/finalize_geocoder.py --db postgresql://geocoder:password@localhost/osmgeocoder
 ```
 
+### v2.1.0
+
+- Add type hints to all interfaces
+- Add `_dict` variants for geocoding functions to get _raw_ data instead of formatted strings
+- Bugfix: Reading of custom opencage data file for address formatting was broken
+- Returned addresses now contain county and state if available
+
 ## TODO
 
 - Return Attribution in API and in webservices
@@ -332,13 +339,25 @@ def __init__(self, db=None, db_handle=None, address_formatter_config=None, posta
 def forward(self, address, country=None, center=None):
     pass
 
+def forward_dict(self, address, country=None, center=None):
+    pass
+
 def forward_structured(self, road=None, house_number=None, postcode=None, city=None, country=None, center=None):
+    pass
+
+def forward_structured_dict(self, road=None, house_number=None, postcode=None, city=None, country=None, center=None):
     pass
 
 def reverse(self, lat, lon, radius=100, limit=10):
     pass
 
+def reverse_dict(self, lat, lon, radius=100, limit=10):
+    pass
+
 def reverse_epsg3857(self, x, y, radius=100, limit=10):
+    pass
+
+def reverse_epsg3857_dict(self, x, y, radius=100, limit=10):
     pass
 
 def predict_text(self, input):
@@ -355,7 +374,7 @@ Initialize a geocoder, this will read all files to be used and set up the DB con
 
 see __Config File__ above for more info.
 
-#### `forward`
+#### `forward` and `forward_dict`
 
 Geocode an address to a lat, lon location.
 - `address`: Address to code
@@ -364,7 +383,7 @@ Geocode an address to a lat, lon location.
 
 This function is a generator which `yield`s the obtained results.
 
-#### `forward_structured`
+#### `forward_structured` and `forward_structured_dict`
 
 Geocode an address to a lat, lon location without using the address classifier, use this if your input is already structured.
 - `road`: (optional) Street/Road name
@@ -377,7 +396,7 @@ Geocode an address to a lat, lon location without using the address classifier, 
 Be sure that at least one of `road`, `postcode` or `city` is filled, results are not predictable if none is set.
 This function is a generator which `yield`s the obtained results.
 
-#### `reverse`
+#### `reverse` and `reverse_dict`
 
 Geocode a lat, lon location into a readable address:
 - `lat`: Latitude to code
@@ -387,7 +406,7 @@ Geocode a lat, lon location into a readable address:
 
 This function is a generator which `yield`s the obtained results.
 
-#### `reverse_epsg3857`
+#### `reverse_epsg3857` and `reverse_epsg3857_dict`
 
 Geocode a x, y location in EPGS 3857 projection (aka Web Mercator) into a readable address:
 - `x`: X coordinate
