@@ -3,7 +3,7 @@
 try:
     from flask import Flask, jsonify, abort, request, Response
     from flask.json import dumps
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     print("Error: Please install Flask, `pip install flask`")
     exit(1)
 
@@ -13,7 +13,7 @@ import os
 
 try:
     from osmgeocoder import Geocoder
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from osmgeocoder import Geocoder
 

@@ -2,7 +2,7 @@
 
 try:
     from flask import Flask, jsonify, abort, request
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     print("Error: Please install Flask, `pip install flask`")
     exit(1)
 
@@ -11,7 +11,7 @@ try:
     from postal.normalize import normalized_tokens
     from postal.expand import expand_address
     from postal.tokenize import tokenize
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     print("Error: You have to install pypostal, instructions: https://github.com/dunkelstern/osmgeocode/blob/master/Readme.md")
     exit(1)
 

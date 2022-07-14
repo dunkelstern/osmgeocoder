@@ -12,7 +12,7 @@ import tempfile
 from time import time, sleep
 try:
     from urllib.parse import urlparse
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     from urlparse import urlparse
 
 from pkg_resources import resource_exists, resource_listdir, resource_string
@@ -44,7 +44,7 @@ def load_sql(db, path):
                 db.execute(resource_string('osmgeocoder', os.path.join(path, f)))
                 end = time()
                 print('{} s'.format(round(end-start, 2)), flush=True)
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         # if not found, assume we have been started from a source checkout
         my_dir = os.path.dirname(os.path.abspath(__file__))
         sql_path = os.path.abspath(os.path.join(my_dir, '../osmgeocoder/', path))
@@ -89,7 +89,7 @@ def imposm_import(db_url, data_file, tmp_dir, optimize):
             temp.write(data)
             temp.seek(0)
             mapping_file = temp.name
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         # if not found, assume we have been started from a source checkout
         my_dir = os.path.dirname(os.path.abspath(__file__))
         mapping_file = os.path.abspath(os.path.join(my_dir, '../osmgeocoder/data/imposm_mapping.yml'))

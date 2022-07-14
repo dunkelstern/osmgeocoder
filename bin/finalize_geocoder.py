@@ -12,7 +12,7 @@ import tempfile
 from time import time, sleep
 try:
     from urllib.parse import urlparse
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     from urlparse import urlparse
 from pkg_resources import resource_exists, resource_listdir, resource_string
 
@@ -40,7 +40,7 @@ def load_sql(db, path):
             for f in sql_files:
                 print('Executing {}...'.format(f))
                 db.execute(resource_string('osmgeocoder', os.path.join(path, f)))
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         # if not found, assume we have been started from a source checkout
         my_dir = os.path.dirname(os.path.abspath(__file__))
         sql_path = os.path.abspath(os.path.join(my_dir, '../osmgeocoder/', path))

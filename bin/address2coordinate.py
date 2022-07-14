@@ -7,7 +7,7 @@ import os
 
 try:
     from osmgeocoder import Geocoder
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from osmgeocoder import Geocoder
 
