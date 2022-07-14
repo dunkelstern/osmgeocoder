@@ -14,7 +14,7 @@ class Geocoder():
 
     def __init__(self,
         db:Optional[Dict[str, Any]]=None,
-        db_handle:Optional[psycopg2.connection]=None,
+        db_handle=None,
         address_formatter_config:Optional[str]=None,
         postal:Optional[Dict[str, Any]]=None
     ):
@@ -35,7 +35,7 @@ class Geocoder():
             self.db = db_handle
         self.formatter = AddressFormatter(config=address_formatter_config)
 
-    def _init_db(self, db_config:Dict[str, Any]) -> psycopg2.connection:
+    def _init_db(self, db_config:Dict[str, Any]):
         connstring = []
         for key, value in db_config.items():
             connstring.append("{}={}".format(key, value))
@@ -137,7 +137,7 @@ class Geocoder():
         """
         data = self.forward_structured_dict(
             road=road,
-            house_number=house_number
+            house_number=house_number,
             postcode=postcode,
             city=city,
             country=country,
