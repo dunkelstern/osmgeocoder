@@ -119,3 +119,8 @@ if __name__ == '__main__':
     close_db(db)
     if args.dump_file:
         dump(args.db_url, args.dump_file, 4)
+        print("Attention: When restoring the DB dump you will have to fix the search path")
+        print("of the DB after importing!")
+        print()
+        print("ALTER DATABASE geocoder SET search_path TO public, gis, str, crypto;")
+

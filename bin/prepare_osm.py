@@ -77,8 +77,11 @@ def close_db(db):
         db.close()
     conn.close()
 
+#
+# imposm interface
+#
 
-def imposm_import(db_url, data_file, tmp_dir, optimize):
+def get_mapping_file():
     mapping_file = None
     temp = None
     try:
@@ -93,6 +96,34 @@ def imposm_import(db_url, data_file, tmp_dir, optimize):
         # if not found, assume we have been started from a source checkout
         my_dir = os.path.dirname(os.path.abspath(__file__))
         mapping_file = os.path.abspath(os.path.join(my_dir, '../osmgeocoder/data/imposm_mapping.yml'))
+    return mapping_file, temp
+
+def imposm_read(data_files, tmp_dir):
+    mapping_file, temp = get_mapping_file()
+
+    first = True
+    for data_file in data_files:
+        args = [
+            'imposm',
+            'import',
+            '-mapping',
+            mapping_file,
+            '-read',
+            data_file,
+            '-cachedir',
+            os.path.join(tmp_dir, 'imposm3'),
+            '-appendcache' if not first else '-overwritecache',
+        ]
+        print(args)
+        subprocess.run(args)
+        first = False
+
+    if temp is not None:
+        temp.close()
+
+
+def imposm_write(db_url, tmp_dir, optimize):
+    mapping_file, temp = get_mapping_file()
 
     args = [
         'imposm',
@@ -101,11 +132,8 @@ def imposm_import(db_url, data_file, tmp_dir, optimize):
         db_url.replace('postgres', 'postgis'),
         '-mapping',
         mapping_file,
-        '-read',
-        data_file,
         '-cachedir',
         os.path.join(tmp_dir, 'imposm3'),
-        '-overwritecache',
         '-write',
     ]
     if optimize:
@@ -133,8 +161,9 @@ def parse_cmdline():
     parser.add_argument(
         '--import-data',
         type=str,
-        dest='data_file',
-        help='OpenStreetMap data file to import'
+        dest='data_files',
+        action='append',
+        help='OpenStreetMap data file to import (can be used multiple times)'
     )
     parser.add_argument(
         '--optimize',
@@ -158,8 +187,9 @@ if __name__ == '__main__':
     args = parse_cmdline()
     db = open_db(args.db_url)
     prepare_db(db)
-    if args.data_file is not None:
-        imposm_import(args.db_url, args.data_file, args.tmp, args.optimize)
+    if args.data_files:
+        imposm_read(args.data_files, args.tmp)
+        imposm_write(args.db_url, args.tmp, args.optimize)
     if args.optimize:
         optimize_db(db)
     close_db(db)
